@@ -1,0 +1,256 @@
+/* ============================================================
+   今日打卡 · style.css
+   单文件样式，无框架无依赖（TECH_DESIGN.md 第 1 节选型）
+   ============================================================ */
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1f2328;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --done: #16a34a;
+  --done-bg: #f0fdf4;
+  --danger: #dc2626;
+  --streak: #ea580c;
+  --streak-bg: #fff7ed;
+  --radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 3rem;
+}
+
+/* ---------- 头部 ---------- */
+
+.app-header {
+  margin-bottom: 1.75rem;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.75rem;
+  letter-spacing: 0.01em;
+}
+
+.app-date {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ---------- 添加表单 ---------- */
+
+.add-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.add-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 0.9rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.add-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.add-btn {
+  flex-shrink: 0;
+  padding: 0.7rem 1.1rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  font-weight: 500;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.add-btn:hover {
+  opacity: 0.9;
+}
+
+.add-btn:active {
+  opacity: 0.8;
+}
+
+/* ---------- 提示条 ---------- */
+
+.hint {
+  min-height: 1.3rem;
+  margin: 0 0 0.75rem;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+/* ---------- 习惯列表 ---------- */
+
+.habit-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.habit-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.habit-item.is-done {
+  background: var(--done-bg);
+  border-color: #bbf7d0;
+}
+
+/* 复选框 */
+
+.habit-check {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--done);
+}
+
+/* 名称 */
+
+.habit-name {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  cursor: pointer;
+}
+
+.habit-item.is-done .habit-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* 连续天数徽章 */
+
+.habit-streak {
+  flex-shrink: 0;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  background: var(--bg);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.habit-streak.is-active {
+  color: var(--streak);
+  background: var(--streak-bg);
+}
+
+/* 删除按钮 */
+
+.habit-delete {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.habit-delete:hover {
+  color: var(--danger);
+  background: #fef2f2;
+}
+
+/* ---------- 空状态 ---------- */
+
+.empty-state {
+  margin: 2.5rem 0;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+/* ---------- 底部 ---------- */
+
+.app-footer {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* ---------- 响应式（PRD 第 5 节：375px - 1440px） ---------- */
+
+@media (max-width: 420px) {
+  .app {
+    padding: 1.75rem 0.9rem 2.5rem;
+  }
+
+  .app-title {
+    font-size: 1.5rem;
+  }
+
+  .add-form {
+    flex-direction: column;
+  }
+
+  .add-btn {
+    width: 100%;
+  }
+
+  .habit-item {
+    flex-wrap: wrap;
+  }
+
+  .habit-name {
+    flex-basis: calc(100% - 3.5rem);
+  }
+}

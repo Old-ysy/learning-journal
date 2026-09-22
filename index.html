@@ -3,82 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Learning Journal · Day 2</title>
-  <style>
-    :root {
-      --bg: #ffffff;
-      --fg: #1f2328;
-      --muted: #57606a;
-      --accent: #0969da;
-      --tag-bg: #ddf4ff;
-      --border: #d0d7de;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0d1117;
-        --fg: #e6edf3;
-        --muted: #8b949e;
-        --accent: #58a6ff;
-        --tag-bg: #1f6feb33;
-        --border: #30363d;
-      }
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--fg);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-      line-height: 1.7;
-    }
-    .container { max-width: 720px; margin: 4rem auto; padding: 0 1.5rem; }
-    .tag {
-      display: inline-block;
-      background: var(--tag-bg);
-      color: var(--accent);
-      padding: 0.2rem 0.7rem;
-      border-radius: 999px;
-      font-size: 0.85rem;
-      font-weight: 500;
-    }
-    h1 { margin-top: 0.6rem; font-size: 2rem; }
-    h2 { margin-top: 2.2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; font-size: 1.25rem; }
-    .muted { color: var(--muted); font-size: 0.92rem; }
-    ul { padding-left: 1.3rem; }
-    li { margin: 0.3rem 0; }
-    code {
-      background: var(--tag-bg);
-      color: var(--accent);
-      padding: 0.1rem 0.4rem;
-      border-radius: 4px;
-      font-size: 0.92em;
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    }
-    .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem; }
-  </style>
+  <title>今日打卡 · 习惯追踪</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
-    <span class="tag">Day 2 · 2026-09-17</span>
-    <h1>我的第一个 GitHub 仓库</h1>
-    <p class="muted">这是一个占位页面——由 WorkBuddy 协助生成，会在后续日子里被真实内容逐步替换。</p>
+  <main class="app">
+    <header class="app-header">
+      <h1 class="app-title">今日打卡</h1>
+      <p class="app-date" id="today-date"></p>
+    </header>
 
-    <h2>这个仓库用来做什么</h2>
-    <p>记录一整段 Web 学习旅程：从 Git / GitHub 基础，到独立部署一个完整站点。</p>
+    <form class="add-form" id="add-form" autocomplete="off">
+      <input
+        type="text"
+        id="habit-input"
+        class="add-input"
+        placeholder="想坚持什么？比如：跑步 30 分钟"
+        maxlength="20"
+        aria-label="习惯名称"
+      />
+      <button type="submit" class="add-btn">+ 添加</button>
+    </form>
 
-    <h2>Day 2 今日进度</h2>
-    <ul>
-      <li>理解 Git 与 GitHub 的关系：本地仓库 ↔ 远程仓库</li>
-      <li>创建仓库并完成首次提交（<code>git init</code> → <code>add</code> → <code>commit</code> → <code>push</code>）</li>
-      <li>配置 <code>.gitignore</code>，确保 <code>.env</code> 等敏感文件不会被上传</li>
-    </ul>
+    <p class="hint" id="hint"></p>
 
-    <h2>接下来</h2>
-    <p>Day 7 起开始做 MVP（最小可用产品）：先功能、后样式；先骨架、后细节。</p>
+    <ul class="habit-list" id="habit-list"></ul>
 
-    <div class="footer">
-      本页面由 AI 协助生成 · <a href="https://github.com/Old-ysy/learning-journal" style="color: var(--accent);">查看仓库</a>
-    </div>
-  </div>
+    <p class="empty-state" id="empty-state" hidden>
+      还没有习惯，从第一个开始吧
+    </p>
+
+    <footer class="app-footer">
+      <span>数据只存在这台浏览器里</span>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
 </body>
 </html>
