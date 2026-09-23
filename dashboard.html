@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>今日打卡 · 主视图 Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+
+    <header class="app-header">
+      <h1 class="app-title">今日打卡</h1>
+      <p id="today-date" class="app-date"></p>
+    </header>
+
+    <!--
+      4 种页面状态切换器：URL ?state=success|loading|empty|error
+      默认 success。
+    -->
+    <nav class="state-switch" aria-label="页面状态切换">
+      <label for="state-select" class="state-switch-label">演示状态：</label>
+      <select id="state-select" class="state-select">
+        <option value="success">Success（有数据）</option>
+        <option value="loading">Loading（加载中）</option>
+        <option value="empty">Empty（暂无数据）</option>
+        <option value="error">Error（加载失败）</option>
+      </select>
+      <span class="state-note">改 URL <code>?state=xxx</code> 也行</span>
+    </nav>
+
+    <!-- 状态出口：每次只显示一个，由 dashboard.js 调度 -->
+    <section id="state-success" class="state-panel" hidden>
+      <ul id="habit-list" class="habit-list"></ul>
+    </section>
+
+    <section id="state-loading" class="state-panel" hidden>
+      <div class="skeleton-list">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+      <p class="skeleton-text">数据加载中…</p>
+    </section>
+
+    <section id="state-empty" class="state-panel" hidden>
+      <div class="empty-card">
+        <div class="empty-emoji">📭</div>
+        <p class="empty-title">还没有习惯</p>
+        <p class="empty-hint">点上面的输入框加一个，开始打卡吧</p>
+      </div>
+    </section>
+
+    <section id="state-error" class="state-panel" hidden>
+      <div class="error-card" role="alert">
+        <div class="error-emoji">⚠️</div>
+        <p class="error-title">数据加载失败</p>
+        <p class="error-hint" id="error-message"></p>
+        <button type="button" class="error-retry" onclick="window.location.reload()">
+          重试
+        </button>
+      </div>
+    </section>
+
+    <footer class="app-footer">
+      <p class="meta-row">
+        <span>数据来源：本地 mock（来自 <code>mock-data.js</code>）</span>
+        <span>·</span>
+        <span id="updated-at"></span>
+      </p>
+      <p class="meta-row">
+        <a href="index.html">← 回到个人版本（Day 7 MVP）</a>
+      </p>
+    </footer>
+
+  </main>
+
+  <script src="mock-data.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

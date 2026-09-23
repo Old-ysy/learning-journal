@@ -25,6 +25,17 @@ python -m http.server 8000
 
 双击 `index.html` 用浏览器打开即可——本项目无构建步骤、无依赖，两种方式都能跑。
 
+### 主视图 Demo（Day 8 · mock 数据版）
+
+<http://localhost:8000/dashboard.html>
+
+- 用 `mock-data.js` 里 8 个假习惯渲染，不读写 localStorage
+- 支持 4 种页面状态切换，改 URL 参数即可：
+  - `?state=success`（默认，有数据列表）
+  - `?state=loading`（骨架屏）
+  - `?state=empty`（空状态）
+  - `?state=error`（错误 + 重试按钮）
+
 ### 停止服务
 
 回到终端按 `Ctrl + C`。
@@ -35,9 +46,12 @@ python -m http.server 8000
 
 ```
 .
-├── index.html        # 页面骨架（唯一页面）
+├── index.html        # 页面骨架（用户本地版，Day 7）
+├── dashboard.html    # 主视图 mock 数据版（Day 8，含 4 种页面状态）
 ├── style.css         # 全部样式（单文件）
-├── app.js            # 全部逻辑：状态 / 事件 / 渲染 / 存储
+├── app.js            # 用户版逻辑：状态 / 事件 / 渲染 / 存储
+├── dashboard.js      # 主视图逻辑：4 种状态渲染出口
+├── mock-data.js      # 假数据（8 个习惯 + 错误对象）
 ├── research.md       # Day 3 调研（3 个同类产品对比、不做清单）
 ├── PRD.md            # Day 4 需求（6 项功能、12 条验收标准）
 ├── TECH_DESIGN.md    # Day 5 技术设计（技术路线、数据流图、数据结构）
