@@ -13,9 +13,14 @@
   --accent-soft: #eff6ff;
   --done: #16a34a;
   --done-bg: #f0fdf4;
+  /* Day 9 修复：小字标签用深色变体，保证 WCAG AA（>=4.5:1）*/
+  --done-text: #15803d;      /* 4.79:1 on --done-bg */
   --danger: #dc2626;
   --streak: #ea580c;
   --streak-bg: #fff7ed;
+  --streak-text: #c2410c;    /* 4.88:1 on --streak-bg */
+  --pending-bg: #fffbeb;
+  --pending-text: #92400e;   /* 6.84:1 on --pending-bg */
   --warn-bg: #fef2f2;
   --radius: 12px;
 }
@@ -66,8 +71,8 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.habit-status.is-done { background: var(--done-bg); color: var(--done); }
-.habit-status.is-pending { background: #fff8e1; color: #b45309; }
+.habit-status.is-done { background: var(--done-bg); color: var(--done-text); }
+.habit-status.is-pending { background: var(--pending-bg); color: var(--pending-text); }
 
 /* 骨架屏（Loading） */
 .skeleton-list { display: flex; flex-direction: column; gap: 10px; }
@@ -123,15 +128,9 @@
 }
 .error-retry:hover { filter: brightness(1.08); }
 
-/* 底部 */
-.app-footer {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 12px;
-}
-.meta-row { margin: 4px 0; display: flex; gap: 6px; flex-wrap: wrap; }
+/* 底部（Day 9 修复：删除与 337 行重复的 .app-footer 定义，
+   只保留 .meta-row；.app-footer 统一用下方 Day 7 版本） */
+.meta-row { margin: 4px 0; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .meta-row a { color: var(--accent); text-decoration: none; }
 .meta-row a:hover { text-decoration: underline; }
 
@@ -297,7 +296,7 @@ body {
 }
 
 .habit-streak.is-active {
-  color: var(--streak);
+  color: var(--streak-text);
   background: var(--streak-bg);
 }
 
@@ -369,4 +368,25 @@ body {
   .habit-name {
     flex-basis: calc(100% - 3.5rem);
   }
+
+  /* Day 9：小屏状态切换器允许换行，避免溢出 */
+  .state-switch {
+    flex-wrap: wrap;
+  }
+}
+
+/* ---------- Day 9 新增：键盘焦点环（可访问性） ----------
+   鼠标点击不显示环（:focus-visible 只在键盘 Tab 时触发），
+   键盘用户能明确看到焦点位置。 */
+
+.add-input:focus-visible,
+.add-btn:focus-visible,
+.habit-check:focus-visible,
+.habit-delete:focus-visible,
+.state-select:focus-visible,
+.error-retry:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
