@@ -185,7 +185,8 @@ function buildItem(habit) {
 
   var streakEl = document.createElement('span');
   streakEl.className = 'habit-streak' + (streak > 0 ? ' is-active' : '');
-  streakEl.textContent = '🔥 ' + streak + ' 天';
+  // streak 为 0 时不挂火苗（"🔥 0 天"像嘲讽），显示中性文案
+  streakEl.textContent = streak > 0 ? '🔥 ' + streak + ' 天' : '还没开始';
 
   var del = document.createElement('button');
   del.type = 'button';
