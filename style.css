@@ -300,6 +300,17 @@ body {
   background: var(--streak-bg);
 }
 
+/* Day 11：打卡成功时徽章脉冲一次，让用户确认「生效了」 */
+@keyframes streak-pulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.habit-streak.is-pulse {
+  animation: streak-pulse 0.45s ease;
+}
+
 /* 删除按钮 */
 
 .habit-delete {
@@ -382,6 +393,7 @@ body {
 .add-input:focus-visible,
 .add-btn:focus-visible,
 .habit-check:focus-visible,
+.habit-name:focus-visible,
 .habit-delete:focus-visible,
 .state-select:focus-visible,
 .error-retry:focus-visible,

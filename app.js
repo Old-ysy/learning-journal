@@ -110,7 +110,7 @@ function addHabit(name) {
   }
 
   state.habits.unshift({
-    id: 'h_' + Date.now(),
+    id: 'h_' + Date.now() + Math.random().toString(36).slice(2, 6),  // 随机尾巴防同毫秒 id 撞车
     name: trimmed.slice(0, MAX_NAME_LEN),
     createdAt: todayStr(),
     records: []
@@ -123,22 +123,50 @@ function addHabit(name) {
 
 function toggleHabit(id) {
   var today = todayStr();
+  var result = null;
 
   for (var i = 0; i < state.habits.length; i++) {
     var habit = state.habits[i];
     if (habit.id !== id) continue;
 
     var idx = habit.records.indexOf(today);
-    if (idx === -1) {
+    var nowChecked = idx === -1;
+    if (nowChecked) {
       habit.records.push(today);        // 勾上
     } else {
       habit.records.splice(idx, 1);     // 撤销
     }
+    // Day 11：把操作结果带出去，让界面能给出「生效了」的反馈
+    result = { checked: nowChecked, streak: calcStreak(habit.records) };
     break;
   }
 
   save();
   render();
+  return result;
+}
+
+/**
+ * Day 11：统一的打卡反馈
+ * - 勾上 → hint 提示「已打卡 · 连续 N 天」+ streak 徽章脉冲一次
+ * - 取消 → hint 提示「已取消今日打卡」
+ * 反馈发生在 render() 之后，所以直接查新 DOM 里的徽章。
+ */
+function handleToggle(id) {
+  var result = toggleHabit(id);
+  if (!result) return result;
+
+  if (result.checked) {
+    showHint('已打卡 · 连续 ' + result.streak + ' 天');
+    var li = listEl.querySelector('[data-id="' + id + '"]');
+    if (li) {
+      var badge = li.querySelector('.habit-streak');
+      if (badge) badge.classList.add('is-pulse');
+    }
+  } else {
+    showHint('已取消今日打卡');
+  }
+  return result;
 }
 
 function deleteHabit(id) {
@@ -182,6 +210,10 @@ function buildItem(habit) {
   var name = document.createElement('span');
   name.className = 'habit-name';
   name.textContent = habit.name;          // textContent 防注入
+  // Day 11 余力：名字可勾选，但要给键盘用户留路——可聚焦 + 语义角色 + 键盘事件
+  name.tabIndex = 0;
+  name.setAttribute('role', 'button');
+  name.setAttribute('aria-label', '切换「' + habit.name + '」的今日打卡');
 
   var streakEl = document.createElement('span');
   streakEl.className = 'habit-streak' + (streak > 0 ? ' is-active' : '');
@@ -234,13 +266,22 @@ listEl.addEventListener('click', function (event) {
   var id = li.dataset.id;
 
   if (target.classList.contains('habit-check')) {
-    toggleHabit(id);                                   // F2
+    handleToggle(id);                                   // F2 + Day 11 反馈
   } else if (target.classList.contains('habit-delete')) {
     var ok = window.confirm('确定删除这个习惯吗？删除后记录不保留。');   // F4
     if (ok) deleteHabit(id);
   } else if (target.classList.contains('habit-name')) {
-    toggleHabit(id);                                   // 点名字也能勾，手指好按
+    handleToggle(id);                                   // 点名字也能勾，手指好按
   }
+});
+
+// Day 11 余力：键盘也能操作——Enter / Space 触发名字勾选
+listEl.addEventListener('keydown', function (event) {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  var target = event.target;
+  if (!target.classList || !target.classList.contains('habit-name')) return;
+  event.preventDefault();                                // 阻止空格滚动页面
+  handleToggle(target.closest('.habit-item').dataset.id);
 });
 
 /* ---------- 启动 ---------- */
