@@ -17,7 +17,8 @@ var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四',
 /* ---------- 状态 ---------- */
 
 var state = {
-  habits: []   // [{ id, name, createdAt, records: ['YYYY-MM-DD', ...] }]
+  habits: [],   // [{ id, name, createdAt, records: ['YYYY-MM-DD', ...] }]
+  filter: ''    // 筛选只作用于显示，不持久化（SKILL.md 规则 1）
 };
 
 /* ---------- DOM 引用 ---------- */
@@ -28,6 +29,8 @@ var inputEl = document.getElementById('habit-input');
 var hintEl = document.getElementById('hint');
 var listEl = document.getElementById('habit-list');
 var emptyEl = document.getElementById('empty-state');
+var noResultEl = document.getElementById('no-result');
+var filterInputEl = document.getElementById('filter-input');
 
 /* ---------- 日期工具 ---------- */
 
@@ -234,15 +237,32 @@ function buildItem(habit) {
   return li;
 }
 
+/* ---------- 筛选（Day 12 · filter-interaction Skill） ---------- */
+
+/**
+ * 返回当前应显示的习惯列表：有筛选词时按名称双向包含、大小写不敏感、忽略首尾空格。
+ * SKILL.md 规则 2：只筛显示，不改 state.habits。
+ */
+function visibleHabits() {
+  var q = state.filter.trim().toLowerCase();
+  if (!q) return state.habits;
+  return state.habits.filter(function (habit) {
+    return habit.name.toLowerCase().indexOf(q) !== -1;
+  });
+}
+
 function render() {
   listEl.textContent = '';
 
-  for (var i = 0; i < state.habits.length; i++) {
-    listEl.appendChild(buildItem(state.habits[i]));
+  var shown = visibleHabits();
+  for (var i = 0; i < shown.length; i++) {
+    listEl.appendChild(buildItem(shown[i]));
   }
 
-  // F6 空状态
+  // F6 空状态（本来就没有习惯）
   emptyEl.hidden = state.habits.length > 0;
+  // 筛选无命中（有习惯但都不匹配），SKILL.md 规则 4：两种空态分开
+  noResultEl.hidden = !(state.habits.length > 0 && shown.length === 0);
 }
 
 /* ---------- 事件绑定 ---------- */
@@ -284,10 +304,28 @@ listEl.addEventListener('keydown', function (event) {
   handleToggle(target.closest('.habit-item').dataset.id);
 });
 
+// Day 12：筛选输入即筛。用 input 事件不用 change（change 要失焦才触发，SKILL.md 规则 3）
+filterInputEl.addEventListener('input', function () {
+  state.filter = filterInputEl.value;
+  render();
+});
+
 /* ---------- 启动 ---------- */
 
 renderDate();
 load();
+
+// Day 12：URL ?filter=xxx 初始化筛选值（SKILL.md 规则 5，与 Day 8 ?state= 同套路）
+try {
+  var filterParam = new URLSearchParams(window.location.search).get('filter');
+  if (filterParam) {
+    state.filter = filterParam;
+    filterInputEl.value = filterParam;
+  }
+} catch (err) {
+  // 老浏览器没有 URLSearchParams 就不初始化，不影响主流程
+}
+
 render();
 
 // 方便在控制台调试（PRD 验收 A12 要求数据可读）

@@ -342,6 +342,27 @@ body {
   font-size: 0.95rem;
 }
 
+/* ---------- 筛选（Day 12） ---------- */
+
+.filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 1rem;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.filter-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 /* ---------- 底部 ---------- */
 
 .app-footer {
@@ -395,6 +416,7 @@ body {
 .habit-check:focus-visible,
 .habit-name:focus-visible,
 .habit-delete:focus-visible,
+.filter-input:focus-visible,
 .state-select:focus-visible,
 .error-retry:focus-visible,
 a:focus-visible {

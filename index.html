@@ -25,12 +25,26 @@
       <button type="submit" class="add-btn">+ 添加</button>
     </form>
 
+    <input
+      type="search"
+      id="filter-input"
+      class="filter-input"
+      placeholder="筛选：输入习惯名称"
+      maxlength="20"
+      aria-label="按名称筛选习惯列表"
+      autocomplete="off"
+    />
+
     <p class="hint" id="hint"></p>
 
     <ul class="habit-list" id="habit-list"></ul>
 
     <p class="empty-state" id="empty-state" hidden>
       还没有习惯，从第一个开始吧
+    </p>
+
+    <p class="empty-state" id="no-result" hidden>
+      没有匹配的习惯，清空筛选看看全部
     </p>
 
     <footer class="app-footer">
