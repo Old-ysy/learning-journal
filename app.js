@@ -32,6 +32,26 @@ var emptyEl = document.getElementById('empty-state');
 var noResultEl = document.getElementById('no-result');
 var filterInputEl = document.getElementById('filter-input');
 
+// Day 13：视图切换 + 状态切换
+var tabsEl = document.getElementById('view-tabs');
+var viewListEl = document.getElementById('view-list');
+var viewDetailEl = document.getElementById('view-detail');
+var viewStatsEl = document.getElementById('view-stats');
+var detailContentEl = document.getElementById('detail-content');
+var crumbBackEl = document.getElementById('crumb-back');
+var crumbCurrentEl = document.getElementById('crumb-current');
+var stateLoadingEl = document.getElementById('state-loading');
+var stateErrorEl = document.getElementById('state-error');
+var errorMsgEl = document.getElementById('error-message');
+var errorRetryEl = document.getElementById('error-retry');
+var statsListEl = document.getElementById('stats-list');
+var statsEmptyEl = document.getElementById('stats-empty');
+
+// 当前视图与列表状态（仅内存，不持久化——刷新就回到默认）
+var currentView = 'list';      // list | detail | stats
+var listState = 'normal';      // normal | loading | empty | error
+var currentHabitId = null;     // detail 视图用
+
 /* ---------- 日期工具 ---------- */
 
 /**
@@ -62,6 +82,7 @@ function load() {
   } catch (err) {
     // 数据损坏时不静默清空，先在控制台报出来，方便排查
     console.error('读取本地数据失败，已忽略：', err);
+    throw err;                          // Day 13：让上层决定显示 error 状态
   }
 }
 
@@ -265,7 +286,263 @@ function render() {
   noResultEl.hidden = !(state.habits.length > 0 && shown.length === 0);
 }
 
+/* ---------- Day 13：视图路由 ---------- */
+
+/**
+ * 读 URL 切视图、列表状态、当前习惯 id。popstate 时也调这个。
+ * URL 结构：?view=list|detail|stats[&habit=xxx][&state=loading|empty|error][&filter=xxx]
+ */
+function applyRoute() {
+  var params = new URLSearchParams(window.location.search);
+
+  // 1) filter 同步到 state（保留 Day 12 的能力）
+  var f = params.get('filter');
+  if (f !== null) {
+    state.filter = f;
+    filterInputEl.value = f;
+  }
+
+  // 2) 视图
+  var view = params.get('view') || 'list';
+  if (view !== 'list' && view !== 'detail' && view !== 'stats') view = 'list';
+  currentView = view;
+  currentHabitId = view === 'detail' ? params.get('habit') : null;
+
+  // 3) list 视图的子状态
+  if (view === 'list') {
+    var st = params.get('state');
+    listState = (st === 'loading' || st === 'empty' || st === 'error') ? st : 'normal';
+  } else {
+    listState = 'normal';
+  }
+
+  renderRoute();
+}
+
+/**
+ * 根据 currentView / listState / currentHabitId 切换面板。
+ * 不改数据，只改 DOM 的 hidden 属性和当前 tab 的 aria-current。
+ */
+function renderRoute() {
+  viewListEl.hidden = currentView !== 'list';
+  viewDetailEl.hidden = currentView !== 'detail';
+  viewStatsEl.hidden = currentView !== 'stats';
+
+  // tab 高亮
+  function findTabs(node) {
+    var out = [];
+    for (var i = 0; i < (node.children || []).length; i++) {
+      var c = node.children[i];
+      if (c.classList && c.classList.contains('view-tab')) out.push(c);
+      out = out.concat(findTabs(c));
+    }
+    return out;
+  }
+  var tabs = findTabs(tabsEl);
+  for (var i = 0; i < tabs.length; i++) {
+    var tab = tabs[i];
+    if (tab.dataset.view === currentView) {
+      tab.setAttribute('aria-current', 'page');
+    } else {
+      tab.setAttribute('aria-current', 'false');
+    }
+  }
+
+  // 面包屑 + 返回按钮（余力加练）
+  crumbBackEl.hidden = currentView === 'list';
+  crumbCurrentEl.textContent =
+    currentView === 'detail' ? '习惯详情' :
+    currentView === 'stats'  ? '统计'     : '列表';
+
+  // list 子状态
+  if (currentView === 'list') renderListState();
+
+  // detail 内容
+  if (currentView === 'detail') renderDetail();
+
+  // stats 内容
+  if (currentView === 'stats') renderStats();
+}
+
+/**
+ * list 视图的 4 种状态：normal / loading / empty / error
+ * normal 由原来的 render() 负责（normal / 筛选无结果 / 原本空），其他三态靠隐藏列表+展示占位
+ */
+function renderListState() {
+  if (listState === 'normal') {
+    stateLoadingEl.hidden = true;
+    stateErrorEl.hidden = true;
+    return;
+  }
+  // loading / empty / error：隐藏原列表与筛选无结果提示
+  listEl.textContent = '';
+  emptyEl.hidden = true;
+  noResultEl.hidden = true;
+  filterInputEl.disabled = listState === 'loading' || listState === 'error';
+  filterInputEl.value = '';
+
+  if (listState === 'loading') {
+    stateLoadingEl.hidden = false;
+    stateErrorEl.hidden = true;
+  } else if (listState === 'empty') {
+    stateLoadingEl.hidden = true;
+    stateErrorEl.hidden = true;
+    emptyEl.hidden = false;
+  } else if (listState === 'error') {
+    stateLoadingEl.hidden = true;
+    stateErrorEl.hidden = false;
+    errorMsgEl.textContent = '本地数据读取失败，请检查浏览器存储权限或重试';
+  }
+}
+
+/**
+ * detail 视图：找到对应习惯，显示它的名称、总打卡次数、连续天数、最近 30 天日历。
+ * 找不到 id → 显示「习惯不存在」的占位。
+ */
+function renderDetail() {
+  detailContentEl.textContent = '';
+  var habit = null;
+  for (var i = 0; i < state.habits.length; i++) {
+    if (state.habits[i].id === currentHabitId) { habit = state.habits[i]; break; }
+  }
+  if (!habit) {
+    var p = document.createElement('p');
+    p.className = 'empty-state';
+    p.textContent = '习惯不存在或已被删除';
+    detailContentEl.appendChild(p);
+    return;
+  }
+
+  var streak = calcStreak(habit.records);
+  var total = habit.records.length;
+  var last30 = last30DaysMap(habit.records);
+
+  var h2 = document.createElement('h2');
+  h2.className = 'detail-name';
+  h2.textContent = habit.name;
+  detailContentEl.appendChild(h2);
+
+  var meta = document.createElement('p');
+  meta.className = 'detail-meta';
+  meta.textContent = '连续 ' + streak + ' 天 · 累计 ' + total + ' 次';
+  detailContentEl.appendChild(meta);
+
+  var grid = document.createElement('div');
+  grid.className = 'detail-cal';
+  var dates = last30Dates();
+  for (var d = 0; d < dates.length; d++) {
+    var cell = document.createElement('div');
+    cell.className = 'detail-cal-cell' + (last30[dates[d]] ? ' is-done' : '');
+    cell.title = dates[d] + (last30[dates[d]] ? ' · 已打卡' : '');
+    grid.appendChild(cell);
+  }
+  detailContentEl.appendChild(grid);
+
+  var calHint = document.createElement('p');
+  calHint.className = 'detail-cal-hint';
+  calHint.textContent = '最近 30 天打卡日历';
+  detailContentEl.appendChild(calHint);
+}
+
+/**
+ * 把 records 转成 {'YYYY-MM-DD': true}，方便查最近 30 天。
+ */
+function last30DaysMap(records) {
+  var set = {};
+  for (var i = 0; i < (records || []).length; i++) set[records[i]] = true;
+  return set;
+}
+
+/**
+ * 返回最近 30 天的 'YYYY-MM-DD'，从今天往前数。
+ */
+function last30Dates() {
+  var arr = [];
+  var d = new Date();
+  for (var i = 0; i < 30; i++) {
+    arr.push(toDateStr(d));
+    d.setDate(d.getDate() - 1);
+  }
+  return arr;
+}
+
+/**
+ * stats 视图：复用列表渲染，但只展示 streak > 0 的习惯，并按 streak 倒序。
+ */
+function renderStats() {
+  statsListEl.textContent = '';
+  var ranked = state.habits.slice().sort(function (a, b) {
+    return calcStreak(b.records) - calcStreak(a.records);
+  });
+  for (var i = 0; i < ranked.length; i++) {
+    statsListEl.appendChild(buildItem(ranked[i]));
+  }
+  statsEmptyEl.hidden = state.habits.length > 0;
+}
+
 /* ---------- 事件绑定 ---------- */
+
+// 视图切换：拦截 tab 点击，只改 URL 不刷新页面
+tabsEl.addEventListener('click', function (event) {
+  var a = event.target.closest('a.view-tab');
+  if (!a) return;
+  event.preventDefault();
+  var view = a.dataset.view;
+  // 只切视图，保留 filter；不带 habit/state
+  var params = new URLSearchParams(window.location.search);
+  params.set('view', view);
+  params.delete('habit');
+  params.delete('state');
+  var qs = params.toString();
+  history.pushState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
+  applyRoute();
+});
+
+// 浏览器前进/后退
+window.addEventListener('popstate', applyRoute);
+
+// 习惯名字点击 → 进详情（只对 list/stats 的 name 起作用）
+listEl.addEventListener('click', function (event) {
+  var target = event.target;
+  // 名字列已经走 detail 路径
+  if (target.classList && target.classList.contains('habit-name')) {
+    var li = target.closest('.habit-item');
+    if (!li) return;
+    var id = li.dataset.id;
+    var params = new URLSearchParams(window.location.search);
+    params.set('view', 'detail');
+    params.set('habit', id);
+    var qs = params.toString();
+    history.pushState(null, '', window.location.pathname + '?' + qs);
+    applyRoute();
+    return;
+  }
+});
+
+statsListEl.addEventListener('click', function (event) {
+  var target = event.target;
+  if (target.classList && target.classList.contains('habit-name')) {
+    var li = target.closest('.habit-item');
+    if (!li) return;
+    var id = li.dataset.id;
+    var params = new URLSearchParams(window.location.search);
+    params.set('view', 'detail');
+    params.set('habit', id);
+    var qs = params.toString();
+    history.pushState(null, '', window.location.pathname + '?' + qs);
+    applyRoute();
+  }
+});
+
+// 面包屑返回按钮（余力加练）
+crumbBackEl.addEventListener('click', function () {
+  history.back();
+});
+
+// error 状态的重试按钮
+errorRetryEl.addEventListener('click', function () {
+  loadWithState();
+});
 
 formEl.addEventListener('submit', function (event) {
   event.preventDefault();
@@ -290,8 +567,6 @@ listEl.addEventListener('click', function (event) {
   } else if (target.classList.contains('habit-delete')) {
     var ok = window.confirm('确定删除这个习惯吗？删除后记录不保留。');   // F4
     if (ok) deleteHabit(id);
-  } else if (target.classList.contains('habit-name')) {
-    handleToggle(id);                                   // 点名字也能勾，手指好按
   }
 });
 
@@ -301,7 +576,15 @@ listEl.addEventListener('keydown', function (event) {
   var target = event.target;
   if (!target.classList || !target.classList.contains('habit-name')) return;
   event.preventDefault();                                // 阻止空格滚动页面
-  handleToggle(target.closest('.habit-item').dataset.id);
+  // 名字当前优先于 toggle——键盘直接进详情更符合预期
+  var li = target.closest('.habit-item');
+  if (!li) return;
+  var id = li.dataset.id;
+  var params = new URLSearchParams(window.location.search);
+  params.set('view', 'detail');
+  params.set('habit', id);
+  history.pushState(null, '', window.location.pathname + '?' + params.toString());
+  applyRoute();
 });
 
 // Day 12：筛选输入即筛。用 input 事件不用 change（change 要失焦才触发，SKILL.md 规则 3）
@@ -313,20 +596,55 @@ filterInputEl.addEventListener('input', function () {
 /* ---------- 启动 ---------- */
 
 renderDate();
-load();
 
-// Day 12：URL ?filter=xxx 初始化筛选值（SKILL.md 规则 5，与 Day 8 ?state= 同套路）
-try {
-  var filterParam = new URLSearchParams(window.location.search).get('filter');
-  if (filterParam) {
-    state.filter = filterParam;
-    filterInputEl.value = filterParam;
+/**
+ * Day 13：把 load 包一层，根据 URL ?state 决定展示哪种 list 状态。
+ *   state=loading  → 显示骨架 250ms 再切回 normal（演示加载）
+ *   state=empty    → 不读 localStorage，强行空
+ *   state=error     → 强行模拟读取失败
+ *   其它（不传或 normal）→ 正常读 localStorage
+ */
+function loadWithState() {
+  var params = new URLSearchParams(window.location.search);
+  var forced = params.get('state');
+
+  if (forced === 'empty') {
+    state.habits = [];
+    listState = 'normal';           // 让正常渲染路径显示 empty-state
+    render();
+    applyRoute();
+    return;
   }
-} catch (err) {
-  // 老浏览器没有 URLSearchParams 就不初始化，不影响主流程
+
+  if (forced === 'error') {
+    listState = 'error';
+    applyRoute();
+    return;
+  }
+
+  if (forced === 'loading') {
+    listState = 'loading';
+    applyRoute();
+    setTimeout(function () {
+      // 把 URL 的 state=loading 摘掉，回到正常
+      var p = new URLSearchParams(window.location.search);
+      p.delete('state');
+      history.replaceState(null, '', window.location.pathname + (p.toString() ? '?' + p : ''));
+      listState = 'normal';
+      load();
+      render();
+      renderRoute();
+    }, 600);
+    return;
+  }
+
+  // 正常路径
+  load();
+  render();
+  applyRoute();
 }
 
-render();
+loadWithState();
 
 // 方便在控制台调试（PRD 验收 A12 要求数据可读）
 window.__habits = function () {

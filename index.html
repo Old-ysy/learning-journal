@@ -8,44 +8,98 @@
 </head>
 <body>
   <main class="app">
+
     <header class="app-header">
       <h1 class="app-title">今日打卡</h1>
       <p class="app-date" id="today-date"></p>
     </header>
 
-    <form class="add-form" id="add-form" autocomplete="off">
+    <!-- Day 13：视图切换导航。三个 tab，靠 URL ?view=list|detail|stats 切换 -->
+    <nav class="view-tabs" id="view-tabs" aria-label="视图切换">
+      <a href="?view=list"  class="view-tab" data-view="list"  aria-current="page">列表</a>
+      <a href="?view=stats" class="view-tab" data-view="stats" aria-current="false">统计</a>
+    </nav>
+
+    <!-- 面包屑：当前视图 + 返回按钮（Day 13 余力加练） -->
+    <nav class="crumbs" id="crumbs" aria-label="位置导航">
+      <button type="button" class="crumb-back" id="crumb-back" hidden>← 返回</button>
+      <span class="crumb-current" id="crumb-current">列表</span>
+    </nav>
+
+    <!-- ========== list 视图 ========== -->
+
+    <section id="view-list" class="view-panel">
+      <form class="add-form" id="add-form" autocomplete="off">
+        <input
+          type="text"
+          id="habit-input"
+          class="add-input"
+          placeholder="想坚持什么？比如：跑步 30 分钟"
+          maxlength="20"
+          aria-label="习惯名称"
+        />
+        <button type="submit" class="add-btn">+ 添加</button>
+      </form>
+
       <input
-        type="text"
-        id="habit-input"
-        class="add-input"
-        placeholder="想坚持什么？比如：跑步 30 分钟"
+        type="search"
+        id="filter-input"
+        class="filter-input"
+        placeholder="筛选：输入习惯名称"
         maxlength="20"
-        aria-label="习惯名称"
+        aria-label="按名称筛选习惯列表"
+        autocomplete="off"
       />
-      <button type="submit" class="add-btn">+ 添加</button>
-    </form>
 
-    <input
-      type="search"
-      id="filter-input"
-      class="filter-input"
-      placeholder="筛选：输入习惯名称"
-      maxlength="20"
-      aria-label="按名称筛选习惯列表"
-      autocomplete="off"
-    />
+      <p class="hint" id="hint"></p>
 
-    <p class="hint" id="hint"></p>
+      <!-- normal：有数据 -->
+      <ul class="habit-list" id="habit-list"></ul>
 
-    <ul class="habit-list" id="habit-list"></ul>
+      <!-- empty：没有任何习惯 -->
+      <p class="empty-state" id="empty-state" hidden>
+        还没有习惯，从第一个开始吧
+      </p>
 
-    <p class="empty-state" id="empty-state" hidden>
-      还没有习惯，从第一个开始吧
-    </p>
+      <!-- 筛选无命中：filter 引用 no-result，不重名 -->
+      <p class="empty-state" id="no-result" hidden>
+        没有匹配的习惯，清空筛选看看全部
+      </p>
 
-    <p class="empty-state" id="no-result" hidden>
-      没有匹配的习惯，清空筛选看看全部
-    </p>
+      <!-- Day 13：loading + error 状态（list 视图的 4 种状态） -->
+      <div id="state-loading" class="state-panel" hidden>
+        <div class="skeleton-list">
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </div>
+        <p class="skeleton-text">数据加载中…</p>
+      </div>
+
+      <div id="state-error" class="state-panel" hidden>
+        <div class="error-card" role="alert">
+          <div class="error-emoji">⚠️</div>
+          <p class="error-title">数据加载失败</p>
+          <p class="error-hint" id="error-message"></p>
+          <button type="button" class="error-retry" id="error-retry">重试</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== detail 视图 ========== -->
+    <section id="view-detail" class="view-panel" hidden>
+      <div id="detail-content"></div>
+    </section>
+
+    <!-- ========== stats 视图（复用 dashboard 渲染） ========== -->
+    <section id="view-stats" class="view-panel" hidden>
+      <div id="stats-content">
+        <div id="stats-success" class="state-panel">
+          <ul id="stats-list" class="habit-list"></ul>
+          <p class="empty-state" id="stats-empty" hidden>还没有习惯，先添加一个再来看统计</p>
+        </div>
+      </div>
+    </section>
 
     <footer class="app-footer">
       <span>数据只存在这台浏览器里</span>
