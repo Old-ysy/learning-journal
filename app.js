@@ -51,6 +51,9 @@ var statsEmptyEl = document.getElementById('stats-empty');
 var currentView = 'list';      // list | detail | stats
 var listState = 'normal';      // normal | loading | empty | error
 var currentHabitId = null;     // detail 视图用
+// Day 14 修复：应用内有没有可返回的页面。
+// 深链直达（?view=detail 直接打开）时为 false，返回按钮不能走 history.back()，否则会退出应用。
+var hasInAppHistory = false;
 
 /* ---------- 日期工具 ---------- */
 
@@ -494,6 +497,7 @@ tabsEl.addEventListener('click', function (event) {
   params.delete('habit');
   params.delete('state');
   var qs = params.toString();
+  hasInAppHistory = true;
   history.pushState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
   applyRoute();
 });
@@ -513,6 +517,7 @@ listEl.addEventListener('click', function (event) {
     params.set('view', 'detail');
     params.set('habit', id);
     var qs = params.toString();
+    hasInAppHistory = true;
     history.pushState(null, '', window.location.pathname + '?' + qs);
     applyRoute();
     return;
@@ -529,14 +534,23 @@ statsListEl.addEventListener('click', function (event) {
     params.set('view', 'detail');
     params.set('habit', id);
     var qs = params.toString();
+    hasInAppHistory = true;
     history.pushState(null, '', window.location.pathname + '?' + qs);
     applyRoute();
   }
 });
 
-// 面包屑返回按钮（余力加练）
+// 面包屑返回按钮（余力加练；Day 14 修复深链场景）
+// 从列表点进来的：栈里有应用内页面，正常 back。
+// 深链直达 detail/stats 的：栈里没有应用内页面，back 会退出应用——改为进入应用内列表。
 crumbBackEl.addEventListener('click', function () {
-  history.back();
+  if (hasInAppHistory) {
+    history.back();
+  } else {
+    hasInAppHistory = true;
+    history.pushState(null, '', window.location.pathname + '?view=list');
+    applyRoute();
+  }
 });
 
 // error 状态的重试按钮
@@ -583,6 +597,7 @@ listEl.addEventListener('keydown', function (event) {
   var params = new URLSearchParams(window.location.search);
   params.set('view', 'detail');
   params.set('habit', id);
+  hasInAppHistory = true;
   history.pushState(null, '', window.location.pathname + '?' + params.toString());
   applyRoute();
 });
