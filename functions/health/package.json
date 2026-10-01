@@ -1,0 +1,7 @@
+{
+  "name": "health",
+  "version": "1.0.0",
+  "description": "今日打卡 · /api/health 健康检查云函数（Day 15）",
+  "main": "index.js",
+  "cloudfunction": true
+}
