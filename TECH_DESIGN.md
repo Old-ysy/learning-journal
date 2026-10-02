@@ -97,6 +97,37 @@
   某天缺失 → 停，返回已数的天数
 ```
 
+### 3.1 云端数据库 Schema（Day 16 起）
+
+Day 15 开通 CloudBase（环境 the-old-d7gopkcrpbbb52f3b，PostgreSQL 模式）后，
+localStorage 的单 key 结构拆成两张表，靠 `records.habit_id → habits.id` 关联：
+
+```sql
+CREATE TABLE habits (
+  id         VARCHAR(64) PRIMARY KEY,            -- 沿用 h_ 前缀字符串 id（与 localStorage 时代一致）
+  name       TEXT        NOT NULL,
+  created_at DATE        NOT NULL DEFAULT CURRENT_DATE
+);
+
+CREATE TABLE records (
+  habit_id VARCHAR(64) NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  done_on  DATE        NOT NULL,
+  PRIMARY KEY (habit_id, done_on)
+);
+```
+
+与 localStorage 版的映射关系：
+
+| localStorage 结构 | 数据库表 | 说明 |
+|---|---|---|
+| `habits[].id / name / createdAt` | `habits` | 一个习惯一行 |
+| `habits[].records[]`（日期数组） | `records` | 一天一行，`(habit_id, done_on)` 复合主键天然去重 |
+
+设计说明（为什么这么拆）：
+- **`records` 从数组改成独立表**：localStorage 里日期数组挂在习惯对象下，是"一个 JSON 存全部"的将就；拆表后一个习惯一天最多一行（复合主键强制），重复打卡在数据库层面就插不进去，不用靠前端去重
+- **`ON DELETE CASCADE`**：删习惯时打卡记录自动跟着删，对应 localStorage 版"删对象就全没了"的行为
+- **日期仍用 `DATE` 类型（YYYY-MM-DD）**：与 api-contract.md 的日期 key 约定一致，streak 计算可以直接用日期减法
+
 ---
 
 ## 4. 前后端分工（本期版）

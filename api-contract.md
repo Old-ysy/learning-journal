@@ -82,8 +82,15 @@
 
 > 数据 schema 沿用 TECH_DESIGN.md 第 3 节，云端只是把 localStorage 的 `habits` 结构搬到服务端，字段不变。
 
+### Day 16 数据库就绪备注（2026-10-02）
+
+- CloudBase PG 已建表：`habits` + `records`（migration `20261002105543_create_habits_records`，建表 SQL 见 `db/schema.sql`）
+- 种子数据：6 个习惯 + 20 条打卡（`db/seed.sql`，幂等可重跑）
+- **Day 17 写读接口时注意**：平台对 `public.*` 表默认启用 RLS 且无策略，浏览器直连（`app.rdb()`）会被拒；云函数用服务端凭据（admin/service_role）访问不受影响，接口走云函数即可。若后续要前端直连，先 `CREATE POLICY`。
+
 ## 四、变更记录
 
 | 日期 | 变更 |
 |---|---|
 | 2026-10-01（Day 15） | 初版：通用约定 + /api/health + 预留接口规划 |
+| 2026-10-02（Day 16） | 数据库备注：PG 建表完成（habits/records），seed 已跑，RLS 注意事项 |
