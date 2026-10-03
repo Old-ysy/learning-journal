@@ -1,7 +1,7 @@
 # API 契约（api-contract.md）· Day 15
 
 > 作用：前后端对接口的「合同」。Day 16-20 每加一个真实接口，先改这份文档再写代码（同 R4 规则的精神：文档与实现不分叉）。
-> 现状：只有 `/api/health` 是真的，其余是 Day 16-20 的预留规划。
+> 现状：`/api/health`（Day 15）和 `GET /api/habits`（Day 17）是真的，其余是 Day 18+ 的预留规划。
 
 ## 一、通用约定
 
@@ -71,11 +71,50 @@
 - `POST` 同地址 → `method` 回显 `POST`，链路一致
 - 部署路径：本地 `functions/health/` → 云函数 `health`（Nodejs18.15，Event 型）→ 网关路由 `/api/health`（匿名访问，auth=false）
 
-## 三、预留接口（Day 16-20 规划，未实现）
+### GET /api/habits（Day 17）
+
+读接口：拉取习惯列表（含每个习惯的打卡记录）。对应课程模板的「GET 热榜 / 收藏列表」，本项目的列表 = 习惯列表。
+
+**查询参数**（都可选）：
+
+| 参数 | 类型 | 说明 |
+|---|---|---|
+| id | string | 传了则只返回该习惯（详情），如 `?id=h_seed_001` |
+| limit | number | 限制返回的习惯条数（1-50），如 `?limit=3`。Day 17 余力加练 |
+
+**响应**（列表）：
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "id": "h_seed_001",
+      "name": "每天 8 杯水",
+      "createdAt": "2026-09-20",
+      "records": ["2026-09-26", "2026-09-27", "2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02"]
+    }
+  ]
+}
+```
+
+**响应**（`?id=` 详情）：`data` 为单个对象而非数组，字段同上；id 不存在时返回 `{ok:false, error:{code:"NOT_FOUND"}}`。
+
+**字段映射说明（数据库 → 接口）**：
+
+| 数据库列（snake_case） | 接口字段（camelCase） | 转换 |
+|---|---|---|
+| habits.id | id | 原样 |
+| habits.name | name | 原样 |
+| habits.created_at | createdAt | 改名（沿用 localStorage 时代的前端字段约定） |
+| records 表多行 | records 数组 | 每行 done_on 取出来塞进数组（还原 localStorage 时代的形状） |
+
+**实现**：Event 云函数 `habits`（Nodejs18.15，@cloudbase/node-sdk 的 `app.rdb()` 查 PG，外键嵌套查询一次拿两表数据）→ 网关路由 `/api/habits`（匿名访问）。云函数服务端身份绕过 RLS。
+
+## 三、预留接口（Day 18+ 规划，未实现）
 
 | 接口 | 方法 | 用途 | 对应现有前端行为 |
 |---|---|---|---|
-| /api/habits | GET | 拉取习惯列表（含 records） | `load()` 替代 localStorage 读取 |
 | /api/habits | POST | 新建习惯 `{ name }` | `addHabit()` |
 | /api/habits/:id/toggle | POST | 打卡/取消打卡 | `toggleHabit()` |
 | /api/habits/:id | DELETE | 删除习惯（带确认） | 删除按钮 |
@@ -94,3 +133,4 @@
 |---|---|
 | 2026-10-01（Day 15） | 初版：通用约定 + /api/health + 预留接口规划 |
 | 2026-10-02（Day 16） | 数据库备注：PG 建表完成（habits/records），seed 已跑，RLS 注意事项 |
+| 2026-10-03（Day 17） | GET /api/habits 契约：列表 + ?id= 详情 + ?limit= 条数限制；字段映射表（snake_case → camelCase） |
