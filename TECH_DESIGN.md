@@ -114,6 +114,9 @@ CREATE TABLE records (
   done_on  DATE        NOT NULL,
   PRIMARY KEY (habit_id, done_on)
 );
+
+-- Day 18 追加：习惯名唯一（防重复提交的数据库层兜底，见 api-contract.md POST /api/habits）
+CREATE UNIQUE INDEX idx_habits_name_unique ON habits (name);
 ```
 
 与 localStorage 版的映射关系：
@@ -127,6 +130,7 @@ CREATE TABLE records (
 - **`records` 从数组改成独立表**：localStorage 里日期数组挂在习惯对象下，是"一个 JSON 存全部"的将就；拆表后一个习惯一天最多一行（复合主键强制），重复打卡在数据库层面就插不进去，不用靠前端去重
 - **`ON DELETE CASCADE`**：删习惯时打卡记录自动跟着删，对应 localStorage 版"删对象就全没了"的行为
 - **日期仍用 `DATE` 类型（YYYY-MM-DD）**：与 api-contract.md 的日期 key 约定一致，streak 计算可以直接用日期减法
+- **`habits.name` 唯一索引（Day 18 追加）**：防重复提交不能只靠「写入前查一遍」——检查和写入之间有竞态窗口，两个并发请求可能同时通过检查。唯一索引把这条规则下沉到数据库，是真正兜得住的那一层；函数捕获唯一冲突错误码（`23505`）转成 `CONFLICT` 返回给前端
 
 ---
 

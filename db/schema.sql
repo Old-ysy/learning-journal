@@ -1,7 +1,8 @@
 -- Day 16｜习惯打卡器 · 建表脚本（CloudBase PostgreSQL）
 -- 两张表：habits（习惯定义）+ records（每日打卡记录）
 -- 关联字段：records.habit_id → habits.id（外键，删习惯级联删记录）
--- 本文件与 CloudBase migration 20261002105543_create_habits_records.sql 内容一致
+-- 建表部分与 migration 20261002105543_create_habits_records.sql 内容一致
+-- Day 18 追加唯一索引（migration 20261004062905_add_habits_name_unique.sql）
 
 CREATE TABLE habits (
   id         VARCHAR(64) PRIMARY KEY,
@@ -26,3 +27,7 @@ COMMENT ON COLUMN records.done_on   IS '打卡日期（YYYY-MM-DD），与 api-c
 
 CREATE INDEX idx_records_done_on ON records (done_on);
 COMMENT ON INDEX idx_records_done_on IS '按日期查记录（统计页"今天打卡总数"类查询）用';
+
+-- ---------- Day 18 追加：习惯名唯一（防重复提交的数据库层兜底） ----------
+CREATE UNIQUE INDEX idx_habits_name_unique ON habits (name);
+COMMENT ON INDEX idx_habits_name_unique IS '习惯名唯一（Day 18 防重复提交：数据库层兜底约束）';
