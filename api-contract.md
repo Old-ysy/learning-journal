@@ -193,6 +193,23 @@
 
 ## 三、预留接口（Day 19+ 规划，未实现）
 
+### ℹ️ Day 19 代码重构（**契约零变更**）
+
+Day 19 把 `functions/habits/index.js`（231 行单文件）拆成四层，**只动内部结构，接口契约一字未改**：
+
+```
+index.js           入口：按 HTTP 方法分流
+handlers/habits.js 编排：读参数 → 调 repo → 组装响应
+repo/habits.js     数据访问：全项目唯一的 SQL 所在地
+lib/db.js          连接：唯一 require('@cloudbase/node-sdk') 的文件
+lib/{response,log,format,validate,request}.js  公共工具
+```
+
+详见 TECH_DESIGN.md 第 6 节。以下全部保持不变：接口路径、请求参数、响应字段名与拼写、
+错误码（BAD_REQUEST / NOT_FOUND / CONFLICT / INTERNAL）、每一句中文错误文案。
+
+验证方式（三层）：本地回归 73/73、新旧差分对比 26/26 一致、部署后公网回归 29/29。
+
 | 接口 | 方法 | 用途 | 对应现有前端行为 |
 |---|---|---|---|
 | /api/habits/:id/toggle | POST | 打卡/取消打卡 | `toggleHabit()` |
@@ -214,3 +231,4 @@
 | 2026-10-02（Day 16） | 数据库备注：PG 建表完成（habits/records），seed 已跑，RLS 注意事项 |
 | 2026-10-03（Day 17） | GET /api/habits 契约：列表 + ?id= 详情 + ?limit= 条数限制；字段映射表（snake_case → camelCase） |
 | 2026-10-04（Day 18） | POST /api/habits 契约：新建习惯（name 校验 + 同名冲突 CONFLICT）；新增 CONFLICT 错误码；防重复提交两层机制说明 |
+| 2026-10-05（Day 19） | **契约未变**。仅重构云函数内部结构（拆为 index/handlers/repo/lib 四层），见 TECH_DESIGN.md 第 6 节 |

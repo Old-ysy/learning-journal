@@ -1,7 +1,7 @@
 {
   "name": "habits",
   "version": "1.0.0",
-  "description": "GET /api/habits 读接口：习惯列表（含打卡记录），Day 17",
+  "description": "GET / POST /api/habits 习惯接口（含打卡记录），Day 19 起按 index/handlers/repo/lib 分层",
   "main": "index.js",
   "dependencies": {
     "@cloudbase/node-sdk": "^4.0.0"
