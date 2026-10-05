@@ -224,6 +224,47 @@ Day 19 主任务就是把它拆开——**只动内部结构，对外契约一�
    lib/request.js    parseBody()     请求体解析（字符串或对象都吃）
 ```
 
+#### 6.2.2 运行时：一次 GET 请求怎么穿过四层（Day 19 余力加练）
+
+上一张是**静态**结构（代码放在哪），这张是**动态**流程（跑起来的时候怎么走），两张配合看才完整。
+以 `GET /api/habits?id=h_seed_001` 为例：
+
+```
+ ① index.js        exports.main(event)
+                   取出 method = event.httpMethod（'GET'），分流到 handleGet
+                        │
+                        ▼
+ ② handlers        handleGet(event)
+    habits.js      读参数 queryStringParameters.id
+                   调 repo.findById(id)   ← 只说「要什么」，不说「怎么查」
+                        │
+                        ▼
+ ③ repo            findById(id)
+    habits.js      db.from('habits').select(...).eq('id', id)
+                   ↑ 整个项目里 SQL 只在这一层出现
+                   原样返回 { data, error }，自己不做任何判断
+                        │
+                        │ 数据原路往上返回
+                        ▼
+ ④ handlers        handleGet 接着执行（回到调用点的下一行）
+    habits.js      这一步才是「翻译」，repo 不管、也不该它管：
+                     error 非空  → fail('INTERNAL', '数据库查询失败：…')
+                     数组是空的  → fail('NOT_FOUND', '习惯不存在：' + id)
+                     查到了      → toApiHabit(data[0])
+                                   snake_case → camelCase，records 合并成日期数组
+                        │
+                        ▼
+ ⑤ 网关            浏览器收到 {"ok":true,"data":{"id":"h_seed_001",...}}
+
+   全程 lib/ 的工具随叫随到：log() 记日志、fail() 造错误、toApiHabit() 转字段。
+   它们不属于任何一层，所以链条上的每一环都能直接调用。
+```
+
+**这张图里最值得记住的是 ③ 和 ④ 的分工**：repo 只回答「查到了几条」，
+至于「一条都没有该算 404 还是算异常」「要不要把 `created_at` 转成 `createdAt`」，全是 handlers 的事。
+这两个职责原先是混在一起的，拆开之后 repository（仓库）这个名字才立得住——
+它像个保管员，只负责把东西取出来递上去，不负责替你决定怎么处置。
+
 ### 6.3 一句话记住调用方向
 
 > **入口分流 → 编排取值 → repo 执行 SQL → 连接层打到数据库。**
