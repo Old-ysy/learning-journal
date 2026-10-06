@@ -25,6 +25,14 @@ python -m http.server 8000
 
 双击 `index.html` 用浏览器打开即可——本项目无构建步骤、无依赖，两种方式都能跑。
 
+### 方式三：公网在线版（Day 20 上线）
+
+<https://the-old-d7gopkcrpbbb52f3b-1499234669.tcloudbaseapp.com>
+
+- 静态文件托管在 CloudBase，习惯列表每次刷新都从云端数据库重新拉取（底部显示「最后更新时间」）
+- 本地打开（`file://` 双击、`http://localhost`）会自动落回 localStorage 那套逻辑，不请求云端
+- 「打卡 / 删除」仍是本地行为，暂未写回云端 —— 这是 Day 20 的范围边界，见 `api-contract.md`
+
 ### 主视图 Demo（Day 8 · mock 数据版）
 
 <http://localhost:8000/dashboard.html>

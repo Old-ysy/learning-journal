@@ -8,12 +8,35 @@
 | 项 | 约定 |
 |---|---|
 | API 基础地址 | `https://the-old-d7gopkcrpbbb52f3b-1499234669.ap-shanghai.app.tcloudbase.com`（CloudBase HTTP 网关默认域名，云函数路由挂在 `/api/*`） |
-| 前端 mock 版页面 | `https://the-old-d7gopkcrpbbb52f3b-1499234669.tcloudbaseapp.com/`（静态托管，Day 8 的 dashboard mock 版） |
+| 前端线上页面 | `https://the-old-d7gopkcrpbbb52f3b-1499234669.tcloudbaseapp.com/`（静态托管，Day 20 起部署真实 `index.html`，列表从云端拉数） |
 | 环境 ID | `the-old-d7gopkcrpbbb52f3b`（上海地域 · 体验版 · 到期 2027-04-01） |
 | 数据格式 | 请求与响应都是 `application/json; charset=utf-8` |
 | 时间格式 | ISO 8601 UTC（如 `2026-10-01T08:00:00.000Z`），前端负责转本地显示 |
 | 习惯 id | 服务端生成的字符串（现有 `h_` 前缀规则沿用） |
 | 日期 key | `YYYY-MM-DD`（与现有 localStorage records 一致） |
+
+### 跨域（CORS）规则 · Day 20 实测订正
+
+网关**按环境的「安全域名」白名单回显** `Access-Control-Allow-Origin`，
+响应同时带 `Access-Control-Allow-Credentials: true`。
+白名单在 CloudBase 控制台「环境 → 安全配置 → 安全域名」维护
+（MCP：`manageEnv(action=addSecurityDomain)`）。当前环境白名单里的 USER 条目就是静态托管域名。
+
+| 请求来源 Origin | 是否拿到 ACAO | 说明 |
+|---|---|---|
+| 静态托管默认域名（`.tcloudbaseapp.com`） | ✅ 回显 | 开通托管时自动加入白名单，`Type: USER` |
+| `http://127.0.0.1:<port>` / `http://localhost:<port>` | ✅ 回显 | 本地调试默认放行 |
+| 白名单外的任意 https 域名 | ❌ 一个 CORS 头都没有 | 浏览器直接拦，**前端代码改不了** |
+| `null`（`file://` 双击打开、`about:blank`） | ❌ 不回显 | Day 18 这条结论依然成立 |
+
+> ⚠️ **订正 Day 18 的记录**：当时只拿 `http://127.0.0.1:8000` 测过一条就归纳成
+> 「网关回显式 ACAO」，并据此推断正式 https 域名也能通过。Day 20 改用**真实静态托管域名**
+> 复测才发现规律其实是「查白名单」，不是「只要是 http(s) 就回显」。
+> 单点归纳写成的结论，第二天就把整个上午带偏了。
+>
+> 顺带：静态托管的 CDN 域名是系统内置域名，**不允许手动挂 `/api` 路由**
+> （`VerifyHTTPServiceRoute` 报 `system internal domain`）。
+> 所以「让页面和接口同源」这条路在平台上走不通，前端只能老老实实走跨域调用。
 
 ### 成功响应形状
 
@@ -232,3 +255,4 @@ lib/{response,log,format,validate,request}.js  公共工具
 | 2026-10-03（Day 17） | GET /api/habits 契约：列表 + ?id= 详情 + ?limit= 条数限制；字段映射表（snake_case → camelCase） |
 | 2026-10-04（Day 18） | POST /api/habits 契约：新建习惯（name 校验 + 同名冲突 CONFLICT）；新增 CONFLICT 错误码；防重复提交两层机制说明 |
 | 2026-10-05（Day 19） | **契约未变**。仅重构云函数内部结构（拆为 index/handlers/repo/lib 四层），见 TECH_DESIGN.md 第 6 节 |
+| 2026-10-06（Day 20） | **契约未变**。前端正式接线：公网页面从 GET /api/habits 取数；新增「跨域（CORS）规则」小节，并订正 Day 18 记录的 ACAO 结论（白名单机制，而非笼统回显） |

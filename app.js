@@ -14,6 +14,23 @@ var MAX_HABITS = 12;          // PRD F1：上限 12 个
 var MAX_NAME_LEN = 20;        // PRD F1：1-20 字符
 var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 
+/* ---------- Day 20：数据源 -------------
+ * 公网 https 页面 → 从云端拉真实数据
+ * 本地打开（file:// / http://127.0.0.1）→ 继续用 localStorage
+ *
+ * 为什么用 location.protocol 判断：测试夹具里的 window.location 只有
+ * pathname 和 search，没有 protocol，所以会自然落回本地分支 ——
+ * Day 13 / Day 14 那套回归测试一行都不用改就能继续跑。
+ * --------------------------------------- */
+var USE_CLOUD = window.location.protocol === 'https:';
+
+// 跨域是怎么过的：环境的「安全域名」白名单里已经有静态托管的公网域名，
+// 网关按白名单回显 Access-Control-Allow-Origin，所以这个跨 HTTPS 域名的请求是被许可的。
+// 白名单之外的来源拿不到任何 ACAO 头，会被浏览器直接拦掉 —— 这是网关层规则，
+// 前端代码改不了，只能在 CloudBase 控制台加安全域名。
+var API_HABITS =
+  'https://the-old-d7gopkcrpbbb52f3b-1499234669.ap-shanghai.app.tcloudbase.com/api/habits';
+
 /* ---------- 状态 ---------- */
 
 var state = {
@@ -50,6 +67,9 @@ var statsEmptyEl = document.getElementById('stats-empty');
 // 当前视图与列表状态（仅内存，不持久化——刷新就回到默认）
 var currentView = 'list';      // list | detail | stats
 var listState = 'normal';      // normal | loading | empty | error
+// Day 20：error 卡片上那句话现在有两种来源（本地读取失败 / 云端读取失败），
+// 所以抽成变量，由触发失败的一方写入
+var listErrorMessage = '本地数据读取失败，请检查浏览器存储权限或重试';
 var currentHabitId = null;     // detail 视图用
 // Day 14 修复：应用内有没有可返回的页面。
 // 深链直达（?view=detail 直接打开）时为 false，返回按钮不能走 history.back()，否则会退出应用。
@@ -70,6 +90,27 @@ function toDateStr(date) {
 
 function todayStr() {
   return toDateStr(new Date());
+}
+
+/* ---------- Day 20：云端读取 ---------- */
+
+/**
+ * 从 habits 接口拉习惯列表。
+ * 成功 → resolve 习惯数组（接口已经返回 camelCase，前端直接用）
+ * 失败 → reject 一个带中文说明的 Error，交给 list 的 error 状态展示
+ *
+ * 这里刻意不 catch：错误统一汇总到调用处，避免同一件事在两处处理。
+ */
+function fetchHabits() {
+  return fetch(API_HABITS).then(function (res) {
+    if (!res.ok) throw new Error('接口返回 HTTP ' + res.status);
+    return res.json();
+  }).then(function (json) {
+    if (!json || json.ok !== true || !json.data) {
+      throw new Error((json && json.error && json.error.message) || '返回数据格式不正确');
+    }
+    return json.data;
+  });
 }
 
 /* ---------- 持久化（F5） ---------- */
@@ -394,7 +435,7 @@ function renderListState() {
   } else if (listState === 'error') {
     stateLoadingEl.hidden = true;
     stateErrorEl.hidden = false;
-    errorMsgEl.textContent = '本地数据读取失败，请检查浏览器存储权限或重试';
+    errorMsgEl.textContent = listErrorMessage;   // Day 20：来源可能是本地，也可能是云端
   }
 }
 
@@ -553,9 +594,9 @@ crumbBackEl.addEventListener('click', function () {
   }
 });
 
-// error 状态的重试按钮
+// error 状态的重试按钮：按当前数据源重试
 errorRetryEl.addEventListener('click', function () {
-  loadWithState();
+  bootstrap();
 });
 
 formEl.addEventListener('submit', function (event) {
@@ -610,7 +651,61 @@ filterInputEl.addEventListener('input', function () {
 
 /* ---------- 启动 ---------- */
 
-renderDate();
+/**
+ * Day 20：公网路径 —— 从云端取真数据。
+ * 先显示 Day 13 做好的骨架屏，取到数据再渲染；失败就进 error 状态，
+ * 复用当时建的那张错误卡片和重试按钮，这次总算有真实用途了。
+ *
+ * ⚠️ 这里必须用 renderRoute() 而不是 applyRoute()：
+ * applyRoute() 会重读 URL 的 state 参数并覆盖 listState，
+ * 一调用就把刚设好的 loading/error 冲回 normal。
+ */
+function loadFromCloud() {
+  applyRoute();            // 先按 URL 定视图
+  listState = 'loading';   // 再单独覆盖 list 子状态
+  renderRoute();
+
+  fetchHabits().then(function (habits) {
+    state.habits = habits;
+    listState = 'normal';
+    render();
+    renderRoute();
+    renderUpdatedAt();
+  }, function (err) {
+    listState = 'error';
+    listErrorMessage = '云端数据读取失败：' + (err && err.message ? err.message : '未知原因');
+    renderRoute();
+  });
+}
+
+/**
+ * 启动入口：按数据源二选一。
+ * 公网 → 云端；本地 → localStorage（Day 13 的原逻辑，一行没动）。
+ */
+function bootstrap() {
+  // 底部那句数据来源跟着实际数据源走：本地打开却写着「来自云端」会误导人
+  var srcEl = document.getElementById('habit-source');
+  if (srcEl) {
+    srcEl.textContent = USE_CLOUD ? '列表来自云端数据库（只读）' : '数据只存在这台浏览器里';
+  }
+  if (USE_CLOUD) loadFromCloud();
+  else loadWithState();
+}
+
+/**
+ * 余力加练：底部「最后更新时间」。
+ * 每次拉数据成功后刷新一次 —— 控制台改完数据回页面按 F5，时间跟着变，
+ * 肉眼就能确认「这次刷的是新数据」而不是浏览器缓存。
+ */
+function renderUpdatedAt() {
+  var updatedEl = document.getElementById('updated-at');
+  if (!updatedEl) return;
+  var now = new Date();
+  var hh = String(now.getHours()).padStart(2, '0');
+  var mm = String(now.getMinutes()).padStart(2, '0');
+  var ss = String(now.getSeconds()).padStart(2, '0');
+  updatedEl.textContent = '数据更新于 ' + hh + ':' + mm + ':' + ss;
+}
 
 /**
  * Day 13：把 load 包一层，根据 URL ?state 决定展示哪种 list 状态。
@@ -659,9 +754,11 @@ function loadWithState() {
   applyRoute();
 }
 
-loadWithState();
+renderDate();
+bootstrap();
 
 // 方便在控制台调试（PRD 验收 A12 要求数据可读）
+// Day 20：公网数据源已经不是 localStorage，改成直接吐内存里的 state
 window.__habits = function () {
-  return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+  return state.habits;
 };
