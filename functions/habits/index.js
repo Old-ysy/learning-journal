@@ -20,8 +20,9 @@
 
 'use strict';
 
-const { handleGet, handlePost } = require('./handlers/habits');
+const { handleGet, handlePost, handlePatch, handleDelete } = require('./handlers/habits');
 const { log } = require('./lib/log');
+const { fail } = require('./lib/response');
 
 exports.main = async function (event) {
   // 网关触发时方法在 event.httpMethod（兼容 requestContext.httpMethod）
@@ -34,5 +35,19 @@ exports.main = async function (event) {
   if (method === 'POST') {
     return handlePost(event);
   }
-  return handleGet(event);
+  // Day 22：改走 PATCH、删走 DELETE，都复用同一条网关路由 /api/habits。
+  // 网关是精确路径路由，子路径 /api/habits/:id 匹配不到函数，所以 id 走 ?id= 参数。
+  if (method === 'PATCH') {
+    return handlePatch(event);
+  }
+  if (method === 'DELETE') {
+    return handleDelete(event);
+  }
+  if (method === 'GET') {
+    return handleGet(event);
+  }
+
+  // 明确拒绝未知方法（不再默默兜底成 GET —— 免得 PUT 被当成查询）
+  log('method_not_allowed', { method: method });
+  return fail('BAD_REQUEST', '不支持的请求方法：' + method);
 };

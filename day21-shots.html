@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day 21 截图页</title>
+<style>
+  :root{
+    --ink:#1f2328; --sub:#57606a; --line:#d8dee4;
+    --pass:#1a7f37; --fail:#cf222e; --skip:#8c959f;
+    --bg:#ffffff; --soft:#f6f8fa;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+    font-size:14px; line-height:1.6;
+  }
+  .shot{ max-width:940px; margin:0 auto 48px; padding:32px 36px; }
+  .shot + .shot{ border-top:2px dashed var(--line); }
+  .shot-head{ display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom:2px solid var(--ink); padding-bottom:8px; margin-bottom:18px; }
+  .shot-head h1{ font-size:20px; margin:0; letter-spacing:.5px; }
+  .shot-head .tag{ font-size:12px; color:var(--sub); }
+  h2{ font-size:15px; margin:22px 0 8px; padding-left:9px; border-left:4px solid var(--ink); }
+  table{ width:100%; border-collapse:collapse; margin:8px 0; }
+  th,td{ border:1px solid var(--line); padding:6px 9px; text-align:left; vertical-align:top; }
+  th{ background:var(--soft); font-weight:600; }
+  .c{ text-align:center }
+  .p{ color:var(--pass); font-weight:600 }
+  .f{ color:var(--fail); font-weight:600 }
+  .s{ color:var(--skip); font-weight:600 }
+  .note{ background:var(--soft); border-left:3px solid var(--sub);
+    padding:8px 12px; margin:10px 0; font-size:13px; color:var(--sub); }
+  .warn{ background:#fff8c5; border-left:3px solid #9a6700;
+    padding:8px 12px; margin:10px 0; font-size:13px; }
+  code{ font-family:Consolas,"Courier New",monospace; font-size:12px;
+    background:var(--soft); padding:1px 4px; border-radius:3px; word-break:break-all; }
+  .big{ font-size:15px; line-height:1.75; margin:12px 0; padding:12px 14px;
+    border:1px solid var(--line); border-radius:6px; }
+  .big b{ display:block; margin-bottom:4px; font-size:16px; }
+  .flow{ white-space:pre; font-family:Consolas,monospace; font-size:12px;
+    background:var(--soft); padding:12px; border-radius:6px; overflow-x:auto; line-height:1.5; }
+  .kv{ display:grid; grid-template-columns:120px 1fr; gap:6px 12px; margin:10px 0; }
+  .kv dt{ color:var(--sub); }
+  .kv dd{ margin:0; }
+  footer{ max-width:940px; margin:0 auto; padding:0 36px 40px;
+    font-size:12px; color:var(--sub); }
+</style>
+</head>
+<body>
+
+<!-- ========== 截图 1：周验收表 ========== -->
+<section class="shot">
+  <div class="shot-head">
+    <h1>第 3 周验收表（Day 15 - Day 21）</h1>
+    <span class="tag">枸杞泡茶 ｜ 2026-10-07 ｜ 截图 1 / 3</span>
+  </div>
+
+  <table>
+    <tr><th class="c">结论</th><th class="c">数量</th><th>项</th></tr>
+    <tr><td class="c p">PASS</td><td class="c">14</td><td>1-14</td></tr>
+    <tr><td class="c f">FAIL</td><td class="c">1</td><td>15（打卡 / 删除未写回云端）</td></tr>
+    <tr><td class="c s">未执行</td><td class="c">2</td><td>16（浏览器 F12 实测）、17（3 分钟演示视频）</td></tr>
+  </table>
+
+  <h2>逐项验收（含证据）</h2>
+  <table>
+    <tr><th class="c" style="width:36px">#</th><th>验收项</th><th>结论</th><th>证据（可复现）</th></tr>
+    <tr><td class="c">1</td><td>云函数在线可用</td><td class="p">PASS</td><td><code>GET /api/health</code> → <code>{"ok":true,...}</code> HTTP 200</td></tr>
+    <tr><td class="c">2</td><td>数据库有真实数据</td><td class="p">PASS</td><td><code>GET /api/habits</code> → 7 条习惯、20 条打卡；无脏数据</td></tr>
+    <tr><td class="c">3</td><td>读接口 GET</td><td class="p">PASS</td><td>列表 / <code>?id=</code> / <code>?limit=</code> 均 200、<code>ok:true</code></td></tr>
+    <tr><td class="c">4</td><td>写接口 POST</td><td class="p">PASS</td><td><code>POST {"name":"Day21 验收写入"}</code> → 新 id <code>h_muxx2po0hyz7</code></td></tr>
+    <tr><td class="c">5</td><td>写后可读回</td><td class="p">PASS</td><td>用新 id 回查命中；列表条数 7 → 8（写成功 ≠ 写对，读回才算数）</td></tr>
+    <tr><td class="c">6</td><td>参数校验</td><td class="p">PASS</td><td><code>{"name":"   "}</code> → <code>BAD_REQUEST 习惯名称不能为空</code></td></tr>
+    <tr><td class="c">7</td><td>重名防御</td><td class="p">PASS</td><td>重复 POST → <code>CONFLICT</code>；函数预检 + 唯一索引两层防并发竞态</td></tr>
+    <tr><td class="c">8</td><td>不存在的 id</td><td class="p">PASS</td><td><code>?id=h_not_exist_zzz</code> → <code>NOT_FOUND</code>（不是空数据、不是 500）</td></tr>
+    <tr><td class="c">9</td><td>公网可访问</td><td class="p">PASS</td><td>首页 200 <code>text/html</code>；app.js 200（25288B）、style.css 200（10518B）</td></tr>
+    <tr><td class="c">10</td><td>页面展示真实数据</td><td class="p">PASS</td><td>线上 app.js + 真网络打线上接口，渲染验证 <b>6/6 PASS</b>：渲染出 7 个 li</td></tr>
+    <tr><td class="c">11</td><td>跨域许可</td><td class="p">PASS</td><td>带静态站 Origin → 回显 ACAO + <code>credentials:true</code>（Day 20 订正：查白名单，非无条件回显）</td></tr>
+    <tr><td class="c">12</td><td>云函数分层</td><td class="p">PASS</td><td><code>grep "db\.from"</code> → 仅 <code>repo/habits.js</code> 4 处；index 与 handlers 0 处</td></tr>
+    <tr><td class="c">13</td><td>本地回归</td><td class="p">PASS</td><td>Day11 13/13 ｜ Day12 23/23 ｜ Day13 43/43 ｜ Day14 19/19 ｜ Day20 20/20 = <b>118 条全绿</b></td></tr>
+    <tr><td class="c">14</td><td>文档与实现一致</td><td class="p">PASS</td><td><code>api-contract.md</code> + <code>TECH_DESIGN.md</code> + <code>README.md</code> 三份对齐</td></tr>
+    <tr><td class="c">15</td><td>打卡 / 删除写回云端</td><td class="f">FAIL</td><td><b>未实现</b>。Day 20 只做只读接线，打卡删除仍写 localStorage，刷新被云端覆盖。下一步：补 <code>GRANT DELETE</code> + 实现 toggle / DELETE 接口</td></tr>
+    <tr><td class="c">16</td><td>浏览器控制台实测无报错</td><td class="s">未执行</td><td>Chromium 冷启动卡住 &gt;5min 终止。替代证据：资源全 200、语法检查通过、渲染 6/6 —— <b>属间接推断</b></td></tr>
+    <tr><td class="c">17</td><td>3 分钟演示视频</td><td class="s">未执行</td><td>余力加练项，本次未做</td></tr>
+  </table>
+
+  <div class="note">原则：每一项都要有可复现的证据。拿不到证据的不写 PASS，如实标 FAIL 或「未执行」。</div>
+</section>
+
+<!-- ========== 截图 2：同伴交叉验证三行结论 ========== -->
+<section class="shot">
+  <div class="shot-head">
+    <h1>同伴交叉验证 · 三行结论</h1>
+    <span class="tag">第 3 周验收 ｜ 截图 2 / 3</span>
+  </div>
+
+  <div class="warn">如实说明：本次交叉验证由 <b>AI 同伴</b> 完成，<b>不是真人同学</b>。真人交叉验证待补。</div>
+
+  <div class="big">
+    <b>① 可打开</b>
+    公网首页 <code>https://the-old-d7gopkcrpbbb52f3b-1499234669.tcloudbaseapp.com/</code> 直接访问返回 HTTP 200、<code>content-type: text/html</code>，引用的 <code>app.js</code> / <code>style.css</code> 均 200。无需登录、无需本地环境，换台设备粘贴地址即可打开。
+  </div>
+
+  <div class="big">
+    <b>② 可读写</b>
+    读：<code>GET /api/habits</code> 返回 7 条真实习惯、20 条打卡记录；写：<code>POST</code> 新建成功拿到新 id <code>h_muxx2po0hyz7</code>，用该 id 回查确认数据一致（测试数据已清理，库恢复 7 条）。读写均为跨 HTTPS 域名调用，网关按白名单回显 ACAO，未被浏览器拦截。
+  </div>
+
+  <div class="big">
+    <b>③ 无报错</b>
+    接口侧三类错误路径均按契约返回中文错误码（<code>BAD_REQUEST</code> / <code>CONFLICT</code> / <code>NOT_FOUND</code>），无 500、无异常堆栈；前端侧 118 条本地断言全绿，真实数据渲染验证 6/6 通过。⚠️ 真浏览器 F12 实测未完成（Chromium 启动卡住），此项为间接推断，建议人工补一次。
+  </div>
+</section>
+
+<!-- ========== 截图 3：演示提纲 ========== -->
+<section class="shot">
+  <div class="shot-head">
+    <h1>3 分钟演示提纲</h1>
+    <span class="tag">四段结构：用户问题 → 核心流程 → 提示词改写 → 验证方式 ｜ 截图 3 / 3</span>
+  </div>
+
+  <h2>第一段 · 用户问题（约 30 秒）</h2>
+  <dl class="kv">
+    <dt>一句话</dt>
+    <dd>我每天想坚持几个小习惯，但手机上记的东西一换设备就没了。我希望打开一个网址就能看到自己坚持了几天——而且数据存在云上，不是存在这台浏览器里。</dd>
+    <dt>三个痛点</dt>
+    <dd>① 数据跟着浏览器走，换设备就丢 → ✅ 存 CloudBase PG，公网可访问<br>② 不知道坚持了多少天 → ✅ 连续天数由打卡记录实时算出<br>③ 想给别人看一眼 → ✅ 有公网链接，粘贴即可打开</dd>
+    <dt>演示动作</dt>
+    <dd>打开首页，指着列表念一条：「跑步 30 分钟，已连续 3 天」。</dd>
+  </dl>
+
+  <h2>第二段 · 核心流程（约 60 秒）</h2>
+  <div class="flow">① 静态托管  the-old-...tcloudbaseapp.com
+       │  浏览器打开，拿到 index.html / app.js / style.css
+       ▼
+② 前端 app.js
+       │  USE_CLOUD 判定 → fetchHabits()
+       │  跨域请求（网关按安全域名白名单回显 ACAO，放行）
+       ▼
+③ 云函数 habits（四层）
+       index.js     只做 HTTP 方法分流
+       handlers     编排：读参数 → 调 repo → 决定错误码
+       repo         唯一写 SQL 的地方
+       lib          数据库连接与工具
+       ▼
+④ PostgreSQL  habits 表 + records 表
+       7 个习惯、20 条打卡记录</div>
+  <table>
+    <tr><th style="width:110px">设计点</th><th>一句话说明</th></tr>
+    <tr><td>分层</td><td>SQL 只在 <code>repo/habits.js</code>；「查不到算 404」是 handler 的判断，repo 只回答「查到几条」</td></tr>
+    <tr><td>防重复</td><td>函数预检 + 数据库唯一索引两层。只做预检的话，并发下两个请求会同时通过检查</td></tr>
+    <tr><td>数据源切换</td><td><code>location.protocol === 'https:'</code> 决定走云端还是 localStorage，本地打开不会误调线上</td></tr>
+  </table>
+
+  <h2>第三段 · 提示词改写（约 60 秒）</h2>
+  <table>
+    <tr><th style="width:80px">例</th><th>初版 ❌</th><th>改写后 ✅</th></tr>
+    <tr>
+      <td>Day 20<br>接线</td>
+      <td>「让页面显示数据」<br><span style="color:var(--fail)">问题：没说数据从哪来、页面指哪个、失败了怎么办，AI 只能猜</span></td>
+      <td>「把 <code>app.js</code> 列表数据源从 localStorage 改成 <code>GET /api/habits</code>。要求：接口路径和字段名不变；公网走云端、本地仍走 localStorage；拉取中显示骨架屏；失败进 error 卡片并说明原因。完成后跑 Day 11-14 回归确认没撞倒老功能。」</td>
+    </tr>
+    <tr>
+      <td>Day 20<br>排查跨域</td>
+      <td>「跨域报错了，帮我看看」<br><span style="color:var(--fail)">问题：没有证据，AI 只能凭经验猜 —— 我第一次就猜错了</span></td>
+      <td>「用 curl 分别带白名单内域名、<code>127.0.0.1:8000</code>、白名单外域名去请求接口，把响应头里的 <code>access-control-*</code> 打出来对比，告诉我网关到底按什么规则给 ACAO。」</td>
+    </tr>
+  </table>
+  <div class="note"><b>方法论：</b>让 AI 先给证据再给结论，并且点名要哪种证据。单点观测不能归纳成机制 —— 这周在这上面栽过一次。</div>
+
+  <h2>第四段 · 验证方式（约 30 秒）</h2>
+  <div class="flow"># ① 能打开 —— 看状态码和 content-type
+curl -I https://the-old-...tcloudbaseapp.com/
+
+# ② 能读 —— 看返回几条
+curl https://...ap-shanghai.app.tcloudbase.com/api/habits
+
+# ③ 能写 —— 写一条，再用返回的 id 读回来（写完记得清掉）
+curl -X POST https://...ap-shanghai.app.tcloudbase.com/api/habits \
+  -H 'Content-Type: application/json' -d '{"name":"演示写入"}'</div>
+  <div class="note"><b>为什么「写后读回」要单独讲：</b>写接口返回成功，不等于数据真的写对了。必须用返回的 id 再查一次，才算闭环。</div>
+  <div class="warn"><b>最后诚实交代两件事（别藏）：</b><br>
+    ❌ 打卡 / 删除写回云端 —— 未实现，目前只读接线，页面页脚已写明<br>
+    ⚪ 真浏览器 F12 实测 —— 未执行，有间接证据但没做浏览器实测</div>
+  <div class="note"><b>收尾一句：</b>这周 15 项验收里 14 项 PASS，1 项 FAIL 已如实标出，2 项未执行也已标明原因。完整记录见 <code>WEEK3_ACCEPTANCE.md</code>。</div>
+</section>
+
+<footer>
+  截图方法：Win + Shift + S 区域截图，或浏览器整页截图。三块内容之间用虚线分隔，各截一次即可。
+</footer>
+
+</body>
+</html>

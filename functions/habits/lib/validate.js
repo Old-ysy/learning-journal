@@ -35,7 +35,19 @@ function validateName(raw) {
   return { value: name, error: null };
 }
 
+// 校验习惯 id（Day 22：PATCH / DELETE 都要先定位到具体一条）
+// missingMessage 允许自定义 —— DELETE 缺 id 要说清「不支持批量删除」，
+// 这本身就是一道确认（见 api-contract.md「删除的三道确认」）
+function validateId(raw, missingMessage) {
+  if (raw === undefined || raw === null || typeof raw !== 'string' || raw.trim() === '') {
+    log('id_missing', { received: typeof raw });
+    return { value: null, error: fail('BAD_REQUEST', missingMessage || '缺少参数 id') };
+  }
+  return { value: raw.trim(), error: null };
+}
+
 module.exports = {
   MAX_NAME_LEN: MAX_NAME_LEN,
   validateName: validateName,
+  validateId: validateId,
 };

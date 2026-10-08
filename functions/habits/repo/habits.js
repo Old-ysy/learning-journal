@@ -43,6 +43,19 @@ function insertHabit(row) {
   return db.from('habits').insert(row);
 }
 
+// 改名称（Day 22 PATCH）：只改 name 一列。
+// 注意 id 与 created_at 不接受修改 —— 这里只传 name，别的列碰不到。
+function updateName(id, name) {
+  return db.from('habits').update({ name: name }).eq('id', id);
+}
+
+// 删除习惯（Day 22 DELETE）：按 id 精确删一条。
+// records 表外键是 ON DELETE CASCADE，打卡记录会被连带删除，
+// 所以 anon 角色必须同时有 records 的 DELETE 权限（Day 22 已 GRANT）。
+function deleteById(id) {
+  return db.from('habits').delete().eq('id', id);
+}
+
 // 判断错误是否为唯一约束冲突（idx_habits_name_unique）
 // 错误码可能藏在 code 或 message 里，两种都认
 function isDuplicateError(err) {
@@ -56,5 +69,7 @@ module.exports = {
   findById: findById,
   findByName: findByName,
   insertHabit: insertHabit,
+  updateName: updateName,
+  deleteById: deleteById,
   isDuplicateError: isDuplicateError,
 };

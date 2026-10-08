@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day 22 截图页 · PATCH / DELETE</title>
+<style>
+  :root{
+    --ink:#1f2328; --sub:#57606a; --line:#d8dee4;
+    --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700;
+    --bg:#ffffff; --soft:#f6f8fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+    font-size:14px;line-height:1.6;}
+  .shot{max-width:960px;margin:0 auto 40px;padding:30px 34px;}
+  .shot + .shot{border-top:2px dashed var(--line);}
+  .head{display:flex;align-items:baseline;justify-content:space-between;
+    border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:16px;}
+  .head h1{font-size:19px;margin:0;letter-spacing:.5px;}
+  .head .tag{font-size:12px;color:var(--sub);}
+  h2{font-size:14px;margin:18px 0 8px;padding-left:9px;border-left:4px solid var(--ink);}
+  table{width:100%;border-collapse:collapse;margin:8px 0;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--soft);font-weight:600;font-size:13px;}
+  code{font-family:Consolas,"Courier New",monospace;font-size:12px;
+    background:var(--soft);padding:1px 4px;border-radius:3px;word-break:break-all;}
+  pre{white-space:pre-wrap;word-break:break-all;font-family:Consolas,"Courier New",monospace;
+    font-size:12px;background:var(--soft);padding:10px 12px;border-radius:6px;
+    margin:6px 0;line-height:1.55;}
+  .ok{color:var(--ok);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
+  .lbl{display:inline-block;min-width:92px;color:var(--sub);font-size:13px;}
+  /* 前后对比：两栏 */
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0;}
+  .cmp>div{border:1px solid var(--line);border-radius:6px;padding:10px 12px;}
+  .cmp .cap{font-size:12px;color:var(--sub);margin-bottom:6px;font-weight:600;}
+  .cmp .val{font-size:15px;font-weight:600;}
+  .arrow{text-align:center;font-size:20px;color:var(--sub);margin:2px 0;}
+  .note{background:var(--soft);border-left:3px solid var(--sub);
+    padding:8px 12px;margin:10px 0;font-size:13px;color:var(--sub);}
+  .good{background:#dafbe1;border-left:3px solid var(--ok);padding:8px 12px;margin:10px 0;font-size:13px;}
+  .warn{background:#fff8c5;border-left:3px solid var(--warn);padding:8px 12px;margin:10px 0;font-size:13px;}
+  footer{max-width:960px;margin:0 auto;padding:0 34px 36px;font-size:12px;color:var(--sub);}
+</style>
+</head>
+<body>
+
+<!-- ============ 截图 1：PATCH 前后对比 ============ -->
+<section class="shot">
+  <div class="head">
+    <h1>截图 1｜PATCH 改名：改之前 vs 改之后</h1>
+    <span class="tag">Day 22 ｜ 目标 id h_muz0z41ig7j7 ｜ 线上实测 2026-10-08</span>
+  </div>
+
+  <h2>① 改之前（GET 读一次，留对照组）</h2>
+  <pre>GET https://the-old-d7gopkcrpbbb52f3b-1499234669.ap-shanghai.app.tcloudbase.com/api/habits?id=h_muz0z41ig7j7
+
+{"ok":true,"data":{"id":"h_muz0z41ig7j7","name":"Day22 验收写入","createdAt":"2026-10-08","records":[]}}</pre>
+
+  <h2>② 发起 PATCH</h2>
+  <pre>PATCH https://.../api/habits?id=h_muz0z41ig7j7
+Content-Type: application/json
+{"name":"Day22 验收改名"}
+
+HTTP 200（592ms）
+{"ok":true,
+ "data":{"id":"h_muz0z41ig7j7","name":"Day22 验收改名","createdAt":"2026-10-08","records":[]},
+ "changed":{"name":{"from":"Day22 验收写入","to":"Day22 验收改名"}}}</pre>
+
+  <h2>③ 改之前 vs 改之后</h2>
+  <div class="cmp">
+    <div>
+      <div class="cap">改之前（① GET 读到的）</div>
+      <div class="val">Day22 验收写入</div>
+    </div>
+    <div>
+      <div class="cap">改之后（② PATCH 的 changed.to）</div>
+      <div class="val ok">Day22 验收改名</div>
+    </div>
+  </div>
+  <div class="arrow">↓ 响应自带前后对照，不用自己记旧值</div>
+  <pre>changed.name.from = "Day22 验收写入"
+changed.name.to   = "Day22 验收改名"</pre>
+
+  <h2>④ 改之后读回验证（写成功 ≠ 写对，读回来才算数）</h2>
+  <pre>GET https://.../api/habits?id=h_muz0z41ig7j7
+
+{"ok":true,"data":{"id":"h_muz0z41ig7j7","name":"Day22 验收改名","createdAt":"2026-10-08","records":[]}}</pre>
+  <div class="good"><b>结论：</b>PATCH 生效。三次取值一致 —— ① 改之前是「Day22 验收写入」、
+    ② PATCH 的 <code>changed</code> 记录了 <code>from → to</code>、
+    ④ 改完再读回仍是「Day22 验收改名」。<code>id</code> / <code>createdAt</code> / <code>records</code> 一个都没被动过。</div>
+
+  <h2>⑤ 顺带测的错误路径</h2>
+  <table>
+    <tr><th style="width:180px">场景</th><th>响应</th></tr>
+    <tr><td>name 为空</td><td><code>BAD_REQUEST</code>「习惯名称不能为空」</td></tr>
+    <tr><td>id 不存在</td><td><code>NOT_FOUND</code>「习惯不存在：h_not_exist_zzz」</td></tr>
+    <tr><td>缺 id</td><td><code>BAD_REQUEST</code>「缺少参数 id」</td></tr>
+    <tr><td>改成已有的名字</td><td><code>CONFLICT</code>「已有同名习惯：跑步 30 分钟」</td></tr>
+  </table>
+</section>
+
+<!-- ============ 截图 2：DELETE 后该条不再返回 ============ -->
+<section class="shot">
+  <div class="head">
+    <h1>截图 2｜DELETE 删除：删之前 → 删之后该条已消失</h1>
+    <span class="tag">Day 22 ｜ 目标 id h_muz10cjd84g9 ｜ 线上实测 2026-10-08</span>
+  </div>
+
+  <h2>① 删之前（这条带着 3 条打卡记录）</h2>
+  <pre>GET https://.../api/habits?id=h_muz10cjd84g9
+
+{"ok":true,"data":{"id":"h_muz10cjd84g9","name":"Day22 级联验证","createdAt":"2026-10-08",
+ "records":["2026-10-06","2026-10-07","2026-10-08"]}}</pre>
+  <div><span class="lbl">打卡记录数</span><b>3 条</b></div>
+
+  <h2>② 发起 DELETE</h2>
+  <pre>DELETE https://.../api/habits?id=h_muz10cjd84g9
+
+HTTP 200（254ms）
+{"ok":true,"data":{"id":"h_muz10cjd84g9","name":"Day22 级联验证",
+ "createdAt":"2026-10-08","deletedRecords":3}}</pre>
+  <div class="warn"><b>deletedRecords = 3</b>：外键 <code>ON DELETE CASCADE</code> 连带删掉了 3 条打卡记录。
+    数据没了，这份快照是唯一的留痕 —— 这也是删除最危险的地方。</div>
+
+  <h2>③ 删之后：GET 里该条已消失</h2>
+  <pre>GET https://.../api/habits?id=h_muz10cjd84g9
+
+{"ok":false,"error":{"code":"NOT_FOUND","message":"习惯不存在：h_muz10cjd84g9"}}</pre>
+
+  <h2>④ 列表里也不再有它，条数回到基线</h2>
+  <pre>GET https://.../api/habits
+
+条数：7（与删除前基线一致）
+列表：跑步 30 分钟 / 睡前阅读 20 分钟 / 23 点前睡觉 / 不吃夜宵 / 背 30 个单词 / 每天散步 20 分钟 / 每天 8 杯水</pre>
+  <div class="good"><b>结论：</b>DELETE 生效。详情查询 <code>NOT_FOUND</code>、列表里没有该 id、条数回到 7。
+    另用 SQL 复核：<code>SELECT COUNT(*) FROM records WHERE habit_id='h_muz10cjd84g9'</code> → <b>0</b>（记录一并清干净，无残留）。</div>
+
+  <h2>⑤ 删除的防误删设计（缺 id 会被拒绝）</h2>
+  <table>
+    <tr><th style="width:180px">场景</th><th>响应</th></tr>
+    <tr><td>不带 id 直接删</td><td><code>BAD_REQUEST</code>「删除必须指定 id，不支持批量删除」<span class="ok">（一行没删）</span></td></tr>
+    <tr><td>id 不存在</td><td><code>NOT_FOUND</code>「习惯不存在：h_not_exist_zzz」<span class="ok">（不静默，明确告知）</span></td></tr>
+  </table>
+  <div class="note"><b>三道确认：</b>① 前端 <code>window.confirm</code> 弹窗（app.js:623）→
+    ② 服务端缺 id 直接拒绝，没有「删全部」的入口 →
+    ③ 服务端先读到才删，读不到就 NOT_FOUND，绝不做「删了但不知道删没删成」。</div>
+</section>
+
+<footer>
+  截图方法：Win + Shift + S 区域截图。两张图之间用虚线分隔，各截一次。<br>
+  数据来源：线上云函数实测（<code>.workbuddy/tmp/collect-day22.js</code> 15/15 通过、<code>collect-day22-cascade.js</code> 4/4 通过），本地单测 53/53 通过。验证后数据库已恢复 7 条习惯 / 20 条打卡，无残留。
+</footer>
+
+</body>
+</html>

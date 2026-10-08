@@ -1,7 +1,7 @@
 # API 契约（api-contract.md）· Day 15
 
 > 作用：前后端对接口的「合同」。Day 16-20 每加一个真实接口，先改这份文档再写代码（同 R4 规则的精神：文档与实现不分叉）。
-> 现状：`/api/health`（Day 15）、`GET /api/habits`（Day 17）、`POST /api/habits`（Day 18）是真的，其余是 Day 19+ 的预留规划。
+> 现状：`/api/health`（Day 15）、`GET /api/habits`（Day 17）、`POST /api/habits`（Day 18）、`PATCH /api/habits`（Day 22）、`DELETE /api/habits`（Day 22）是真的；`/api/habits/:id/toggle` 仍是 Day 23+ 的预留。
 
 ## 一、通用约定
 
@@ -214,6 +214,116 @@
   - 删除习惯（写 `habits` 表）→ `GRANT DELETE ON TABLE habits TO anon`
 - 权限与 RLS 是两件事：本例 RLS 全程关闭，纯粹是表级 GRANT 没给写权限。
 
+### PATCH /api/habits（Day 22）
+
+改接口：修改一个已存在习惯的名称。今日主任务 ①。
+
+**为什么用 `?id=` 而不是 `/api/habits/:id`**：网关路由是**精确路径** `/api/habits`（`queryGateway listRoutes` 确认，不带通配符），
+子路径 `/api/habits/h_xxx` 匹配不到云函数。所以沿用 GET 详情已有的 `?id=` 风格，靠 HTTP 方法区分操作，网关侧零改动。
+
+**请求**：`PATCH /api/habits?id=h_seed_001`
+
+| 参数 | 位置 | 必填 | 说明 |
+|---|---|---|---|
+| id | query `?id=` 或 body 里的 `id` | 是 | 两者都传时以 query 为准 |
+| name | body | 是 | 新名称，校验规则与 POST 完全一致（去空格非空，1-20 字） |
+
+```json
+{ "name": "每天 6 杯水" }
+```
+
+**响应（成功）**：
+
+```json
+{
+  "ok": true,
+  "data": { "id": "h_seed_001", "name": "每天 6 杯水", "createdAt": "2026-09-20", "records": [] },
+  "changed": { "name": { "from": "每天 8 杯水", "to": "每天 6 杯水" } }
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| data | 修改**后**的完整习惯，形状与 GET 详情一致（改完再读回一次，不是拿请求体拼出来的） |
+| changed | 变更前后对照。让调用方一眼看到「改了什么」，不需要自己记着旧值 |
+
+**响应（失败）**：
+
+| code | 触发条件 | message 示例 |
+|---|---|---|
+| `BAD_REQUEST` | 缺少 id | 「缺少参数 id」 |
+| `BAD_REQUEST` | name 缺失 / 空 / 超 20 字（同 POST） | 「习惯名称不能为空」 |
+| `BAD_REQUEST` | 请求体不是合法 JSON / 不是对象 | 「请求体必须是合法的 JSON」 |
+| `NOT_FOUND` | id 不存在 | 「习惯不存在：h_xxx」 |
+| `CONFLICT` | 新名字与**另一个**习惯重名 | 「已有同名习惯：每天 6 杯水」 |
+| `INTERNAL` | 数据库写入失败 | 「数据库更新失败：…」 |
+
+> **关于「改成自己现在的名字」**：允许，返回 `ok:true` 且 `changed.name.from === changed.name.to`，
+> 不报 CONFLICT。重名检查排除自己 —— 否则「保存但没改动」会被误判成冲突。
+
+### DELETE /api/habits（Day 22）
+
+删接口：删除一个习惯。今日主任务 ②。
+
+**请求**：`DELETE /api/habits?id=h_seed_001`（无请求体）
+
+| 参数 | 位置 | 必填 | 说明 |
+|---|---|---|---|
+| id | query `?id=` 或 body 里的 `id` | **是（强制）** | 缺 id 直接拒绝，见下方「确认机制」 |
+
+**响应（成功）**：
+
+```json
+{
+  "ok": true,
+  "data": { "id": "h_seed_001", "name": "每天 8 杯水", "createdAt": "2026-09-20", "deletedRecords": 7 }
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| data | **删除前**的快照：删了什么名字的习惯、连带删了多少条打卡记录。删完数据就没了，这份快照是唯一的留痕 |
+| deletedRecords | 被外键 `ON DELETE CASCADE` 连带删掉的 records 行数 |
+
+**响应（失败）**：
+
+| code | 触发条件 | message 示例 |
+|---|---|---|
+| `BAD_REQUEST` | 缺少 id | 「删除必须指定 id，不支持批量删除」 |
+| `NOT_FOUND` | id 不存在 | 「习惯不存在：h_xxx」 |
+| `INTERNAL` | 数据库删除失败 | 「数据库删除失败：…」 |
+
+#### ⚠️ 删除的三道确认（今日一问的答案）
+
+删除比新增危险，因为它**不可逆、有连带、且失败往往静默**。本项目在三层各加一道确认：
+
+| 层 | 确认手段 | 防的事 |
+|---|---|---|
+| 前端交互 | `window.confirm('确定删除这个习惯吗？删除后记录不保留。')`（app.js:623） | 手滑点错 |
+| 服务端入参 | **缺 id 直接 `BAD_REQUEST`，拒绝批量删除**。没有「不带条件就删全部」的入口 | 一个误请求清空整表 |
+| 服务端执行 | 先 `findById` 读到才删；读不到返回 `NOT_FOUND`，**不做「删了但不知道删没删成」** | 静默失败：调用方以为删了，其实没删 |
+
+再加一条留痕：响应返回删除前快照（名字 + 连带记录数），云函数日志 `delete_done` 同步记一条，
+数据虽然没了，但「删过什么、删了多少」可追溯。
+
+> **级联提醒**：`records.habit_id → habits.id` 外键是 `ON DELETE CASCADE`，
+> 删一个习惯会连带删掉它的全部打卡记录。所以 `anon` 角色除了 habits 的 DELETE，
+> 还必须拿到 records 的 DELETE 权限（Day 22 已 `GRANT`），否则级联会因权限不足报错。
+
+### ⚠️ Day 22 踩坑预告：GRANT 要一次补齐（Day 23 写 toggle 必读）
+
+Day 22 补权限时确认的现状（`information_schema.role_table_grants`）：
+
+| 表 | anon 原有 | Day 22 补后 |
+|---|---|---|
+| habits | `INSERT,SELECT` | `DELETE,INSERT,SELECT,UPDATE` |
+| records | `SELECT` | `DELETE,SELECT,INSERT` |
+
+- PATCH 需要 `habits.UPDATE`；DELETE 需要 `habits.DELETE` **加上 `records.DELETE`**（级联）。
+- `records.INSERT` 本计划 Day 23 做 toggle 时再给，Day 22 为了**验证级联删除**（先插 3 条记录再删，
+  看 `deletedRecords` 是否真等于 3）提前加上了 —— 顺带让 Day 23 少一道准备工作。
+- 权限与 RLS 依旧是两件事：本例 RLS 全程关闭，纯粹表级 GRANT。
+
 ## 三、预留接口（Day 19+ 规划，未实现）
 
 ### ℹ️ Day 19 代码重构（**契约零变更**）
@@ -233,10 +343,11 @@ lib/{response,log,format,validate,request}.js  公共工具
 
 验证方式（三层）：本地回归 73/73、新旧差分对比 26/26 一致、部署后公网回归 29/29。
 
-| 接口 | 方法 | 用途 | 对应现有前端行为 |
+| 接口 | 方法 | 用途 | 状态 |
 |---|---|---|---|
-| /api/habits/:id/toggle | POST | 打卡/取消打卡 | `toggleHabit()` |
-| /api/habits/:id | DELETE | 删除习惯（带确认） | 删除按钮 |
+| /api/habits | PATCH | 改习惯名（`?id=`） | ✅ **Day 22 已实现**（见第二节） |
+| /api/habits | DELETE | 删习惯（`?id=`，带三道确认） | ✅ **Day 22 已实现**（见第二节） |
+| /api/habits/:id/toggle | POST | 打卡/取消打卡 | ⬜ 待 Day 23。落地形式待定：网关是精确路由，大概率同样走 `?id=` + POST，或新增 `/api/habits/toggle` 路由 |
 
 > 数据 schema 沿用 TECH_DESIGN.md 第 3 节，云端只是把 localStorage 的 `habits` 结构搬到服务端，字段不变。
 
@@ -256,3 +367,4 @@ lib/{response,log,format,validate,request}.js  公共工具
 | 2026-10-04（Day 18） | POST /api/habits 契约：新建习惯（name 校验 + 同名冲突 CONFLICT）；新增 CONFLICT 错误码；防重复提交两层机制说明 |
 | 2026-10-05（Day 19） | **契约未变**。仅重构云函数内部结构（拆为 index/handlers/repo/lib 四层），见 TECH_DESIGN.md 第 6 节 |
 | 2026-10-06（Day 20） | **契约未变**。前端正式接线：公网页面从 GET /api/habits 取数；新增「跨域（CORS）规则」小节，并订正 Day 18 记录的 ACAO 结论（白名单机制，而非笼统回显） |
+| 2026-10-08（Day 22） | 新增 `PATCH /api/habits`（改习惯名，响应带 `changed` 前后对照）与 `DELETE /api/habits`（删习惯，响应带删除前快照 `deletedRecords`）；删除的三道确认机制；都走 `?id=` + 方法分流（网关是精确路由，子路径不通）；补 `anon` 的 UPDATE/DELETE 权限（含 records 级联所需） |

@@ -26,4 +26,41 @@ function parseBody(event) {
   return { body: raw, error: null };
 }
 
-module.exports = { parseBody: parseBody };
+// 取 id：优先 query ?id=，其次 body 里的 id（Day 22 PATCH / DELETE 用）
+//
+// 为什么两条路都要：网关路由是精确路径 /api/habits，子路径走不通，
+// 所以 id 只能走参数。curl 调试时 ?id= 顺手，前端 fetch 时放 body 顺手，都支持。
+//
+// DELETE 的请求体通常为空，所以这里对 body「解析失败」是宽容的（当没有 id），
+// 最终由 validateId 统一报「缺少参数 id」—— 不会因为空 body 先撞上「请求体不能为空」。
+function pickId(event) {
+  const query = (event && event.queryStringParameters) || {};
+  const fromQuery = normalizeId(query.id);
+  if (fromQuery) {
+    return fromQuery;
+  }
+
+  let raw = event && (event.body !== undefined ? event.body : event.data);
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    try {
+      raw = JSON.parse(raw);
+    } catch (e) {
+      return null; // 不是合法 JSON 就当没带 id
+    }
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const fromBody = normalizeId(raw.id);
+    if (fromBody) {
+      return fromBody;
+    }
+  }
+  return null;
+}
+
+function normalizeId(value) {
+  if (value === undefined || value === null) return null;
+  const s = String(value).trim();
+  return s === '' ? null : s;
+}
+
+module.exports = { parseBody: parseBody, pickId: pickId };
