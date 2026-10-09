@@ -59,6 +59,43 @@
 
 > 注：云函数 HTTP 访问层默认可能统一 200，业务错误靠 `ok` 字段区分；Day 16 接入时再定状态码映射，先以 `ok` 为准。
 
+### 错误文案约定 · Day 23
+
+**一句话：响应里的 `message` 一律中文人话，且不含任何原始错误内容。**
+
+原因有两个：① 用户要的是"我现在该怎么办"，不是数据库内部细节；② 表名、字段名、约束名暴露到公网等于给攻击者递地图。
+
+| 规则 | 说明 |
+|---|---|
+| 只给人话 | `message` 里不许出现英文技术词、表名、约束名、IP、端口 |
+| 原文进日志 | 原始错误截断 300 字符写进 `log()`，排查去云函数日志看，不回给用户 |
+| 说清下一步 | 文案写"用户现在能做什么"，不写"系统哪里坏了" |
+| 冲突不是故障 | 重名这类用户改一下就能过的，返 `CONFLICT`（4xx），不返 `INTERNAL`（5xx） |
+
+三类错误的分工：
+
+| 类型 | code | 文案要求 | 例子 |
+|---|---|---|---|
+| 参数错 | `BAD_REQUEST` | 明确指出哪一项错了、正确的做法是什么 | `习惯名称最多 20 个字`、`删除必须指定 id，不支持批量删除` |
+| 资源不存在 | `NOT_FOUND` | 说清楚找的是哪个，绝不静默 | `习惯不存在：h_xxx` |
+| 服务端出错 | `INTERNAL` | 通用兜底 + 已记录，不暴露原因 | `数据读取失败，请稍后重试` |
+
+已知数据库错误的翻译（实现在 `functions/habits/lib/errors.js` 的 `translateDbError`）：
+
+| 原始错误 | 对外文案 |
+|---|---|
+| `42501` permission denied | 服务端缺少这项操作的权限，问题已记录，请稍后重试 |
+| `23503` violates foreign key | 该数据仍被其它记录引用，暂不能删除 |
+| `23505` duplicate key | 已存在相同的数据，请勿重复提交（业务路径已先返 `CONFLICT`，这是兜底） |
+| `57014` / timeout | 数据库响应超时，请稍后重试 |
+| `ECONNREFUSED` / `ENOTFOUND` / `ECONNRESET` | 数据库连接异常，请稍后重试 |
+| `23502` violates not-null | 服务端数据不完整，问题已记录，请稍后重试 |
+| `22P02` invalid input syntax | 服务端数据格式有误，问题已记录，请稍后重试 |
+| 翻译不了 | 按操作类型兜底：读/写/改/删 →「数据〇〇失败，请稍后重试」 |
+
+> 改前长这样：`"数据库删除失败：update or delete on table \"habits\" violates foreign key constraint \"records_habit_id_fkey\" on table \"records\""`
+> 改后长这样：`"该数据仍被其它记录引用，暂不能删除"`
+
 ## 二、已实现接口
 
 ### GET /api/health（Day 15）
@@ -368,3 +405,4 @@ lib/{response,log,format,validate,request}.js  公共工具
 | 2026-10-05（Day 19） | **契约未变**。仅重构云函数内部结构（拆为 index/handlers/repo/lib 四层），见 TECH_DESIGN.md 第 6 节 |
 | 2026-10-06（Day 20） | **契约未变**。前端正式接线：公网页面从 GET /api/habits 取数；新增「跨域（CORS）规则」小节，并订正 Day 18 记录的 ACAO 结论（白名单机制，而非笼统回显） |
 | 2026-10-08（Day 22） | 新增 `PATCH /api/habits`（改习惯名，响应带 `changed` 前后对照）与 `DELETE /api/habits`（删习惯，响应带删除前快照 `deletedRecords`）；删除的三道确认机制；都走 `?id=` + 方法分流（网关是精确路由，子路径不通）；补 `anon` 的 UPDATE/DELETE 权限（含 records 级联所需） |
+| 2026-10-09（Day 23） | **响应字段未变**。新增「错误文案约定」小节：所有 `message` 统一中文人话且不含原始错误内容，原文只进日志；新增 `lib/errors.js` 做翻译与兜底；请求日志补齐「结果」（`request_done` 带 ok / code / ms） |

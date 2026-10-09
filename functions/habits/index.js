@@ -24,14 +24,8 @@ const { handleGet, handlePost, handlePatch, handleDelete } = require('./handlers
 const { log } = require('./lib/log');
 const { fail } = require('./lib/response');
 
-exports.main = async function (event) {
-  // 网关触发时方法在 event.httpMethod（兼容 requestContext.httpMethod）
-  const method = String(
-    (event && (event.httpMethod || (event.requestContext && event.requestContext.httpMethod))) || 'GET'
-  ).toUpperCase();
-
-  log('request', { method: method, path: event && event.path });
-
+// 方法分流：GET / POST / PATCH / DELETE，其余明确拒绝
+function dispatch(method, event) {
   if (method === 'POST') {
     return handlePost(event);
   }
@@ -50,4 +44,30 @@ exports.main = async function (event) {
   // 明确拒绝未知方法（不再默默兜底成 GET —— 免得 PUT 被当成查询）
   log('method_not_allowed', { method: method });
   return fail('BAD_REQUEST', '不支持的请求方法：' + method);
+}
+
+exports.main = async function (event) {
+  // 网关触发时方法在 event.httpMethod（兼容 requestContext.httpMethod）
+  const method = String(
+    (event && (event.httpMethod || (event.requestContext && event.requestContext.httpMethod))) || 'GET'
+  ).toUpperCase();
+  const path = event && event.path;
+  const startedAt = Date.now();
+
+  // 请求进来记一条：时间 + 路径 + 方法（lib/log.js 的 at 字段就是时间）
+  log('request', { method: method, path: path });
+
+  const result = await dispatch(method, event);
+
+  // Day 23 余力加练：请求结束再记一条，补上「结果」和耗时。
+  //   只记结论（ok / 错误码 / 毫秒），不记任何响应正文 —— 日志里不该存业务数据。
+  log('request_done', {
+    method: method,
+    path: path,
+    ok: result.ok === true,
+    code: (result && result.error && result.error.code) || null,
+    ms: Date.now() - startedAt,
+  });
+
+  return result;
 };

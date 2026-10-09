@@ -13,6 +13,8 @@
 const repo = require('../repo/habits');
 const { fail } = require('../lib/response');
 const { log } = require('../lib/log');
+// Day 23：所有「数据库原始报错」「未预期异常」统一走这里 —— 对外只给中文人话
+const { dbFail, unexpectedFail } = require('../lib/errors');
 const { toApiHabit, todayStr, makeHabitId } = require('../lib/format');
 const { parseBody, pickId } = require('../lib/request');
 const { validateName, validateId } = require('../lib/validate');
@@ -37,8 +39,7 @@ async function handleGet(event) {
       const { data, error } = await repo.findById(query.id);
 
       if (error) {
-        log('get_db_error', { error: error.message || JSON.stringify(error) });
-        return fail('INTERNAL', '数据库查询失败：' + (error.message || JSON.stringify(error)));
+        return dbFail('read', error, 'get_detail_db_error');
       }
       if (!data || data.length === 0) {
         log('get_not_found', { id: query.id });
@@ -51,15 +52,13 @@ async function handleGet(event) {
     const { data, error } = await repo.listHabits(limit);
 
     if (error) {
-      log('get_db_error', { error: error.message || JSON.stringify(error) });
-      return fail('INTERNAL', '数据库查询失败：' + (error.message || JSON.stringify(error)));
+      return dbFail('read', error, 'get_list_db_error');
     }
 
     const habits = (data || []).map(toApiHabit);
     return { ok: true, data: habits, total: habits.length };
   } catch (err) {
-    log('get_exception', { message: err && err.message });
-    return fail('INTERNAL', '云函数异常：' + (err && err.message));
+    return unexpectedFail(err, 'get_exception');
   }
 }
 
@@ -86,8 +85,7 @@ async function handlePost(event) {
     const { data: dup, error: dupErr } = await repo.findByName(name);
 
     if (dupErr) {
-      log('post_dup_check_error', { error: dupErr.message || JSON.stringify(dupErr) });
-      return fail('INTERNAL', '数据库查询失败：' + (dupErr.message || JSON.stringify(dupErr)));
+      return dbFail('read', dupErr, 'post_dup_check_error');
     }
     if (dup && dup.length > 0) {
       log('post_conflict_precheck', { name: name, existingId: dup[0].id });
@@ -110,8 +108,7 @@ async function handlePost(event) {
         log('post_conflict_db', { name: name, raw: String(insErr.code || '') + ' ' + String(insErr.message || '') });
         return fail('CONFLICT', '已有同名习惯：' + name);
       }
-      log('post_insert_error', { error: insErr.message || JSON.stringify(insErr) });
-      return fail('INTERNAL', '数据库写入失败：' + (insErr.message || JSON.stringify(insErr)));
+      return dbFail('write', insErr, 'post_insert_error');
     }
 
     log('post_created', { id: id, name: name });
@@ -127,8 +124,7 @@ async function handlePost(event) {
       },
     };
   } catch (err) {
-    log('post_exception', { message: err && err.message });
-    return fail('INTERNAL', '云函数异常：' + (err && err.message));
+    return unexpectedFail(err, 'post_exception');
   }
 }
 
@@ -161,8 +157,7 @@ async function handlePatch(event) {
     const { data: found, error: findErr } = await repo.findById(id);
 
     if (findErr) {
-      log('patch_find_error', { error: findErr.message || JSON.stringify(findErr) });
-      return fail('INTERNAL', '数据库查询失败：' + (findErr.message || JSON.stringify(findErr)));
+      return dbFail('read', findErr, 'patch_find_error');
     }
     if (!found || found.length === 0) {
       log('patch_not_found', { id: id });
@@ -175,8 +170,7 @@ async function handlePatch(event) {
     const { data: dup, error: dupErr } = await repo.findByName(name);
 
     if (dupErr) {
-      log('patch_dup_check_error', { error: dupErr.message || JSON.stringify(dupErr) });
-      return fail('INTERNAL', '数据库查询失败：' + (dupErr.message || JSON.stringify(dupErr)));
+      return dbFail('read', dupErr, 'patch_dup_check_error');
     }
     if (dup && dup.some(function (row) { return row.id !== id; })) {
       log('patch_conflict_precheck', { id: id, name: name });
@@ -191,8 +185,7 @@ async function handlePatch(event) {
         log('patch_conflict_db', { id: id, name: name, raw: String(updErr.code || '') });
         return fail('CONFLICT', '已有同名习惯：' + name);
       }
-      log('patch_update_error', { error: updErr.message || JSON.stringify(updErr) });
-      return fail('INTERNAL', '数据库更新失败：' + (updErr.message || JSON.stringify(updErr)));
+      return dbFail('update', updErr, 'patch_update_error');
     }
 
     // ⑦ 改完再读回一次：返回库里的真实值，而不是拿请求体拼一个「看起来改成功了」
@@ -200,8 +193,7 @@ async function handlePatch(event) {
     const { data: after, error: afterErr } = await repo.findById(id);
 
     if (afterErr || !after || after.length === 0) {
-      log('patch_reread_error', { error: afterErr && (afterErr.message || JSON.stringify(afterErr)) });
-      return fail('INTERNAL', '数据库更新后读取失败：' + (afterErr && (afterErr.message || JSON.stringify(afterErr))));
+      return dbFail('readback', afterErr, 'patch_reread_error');
     }
     const afterHabit = toApiHabit(after[0]);
 
@@ -213,8 +205,7 @@ async function handlePatch(event) {
       changed: { name: { from: before.name, to: afterHabit.name } },
     };
   } catch (err) {
-    log('patch_exception', { message: err && err.message });
-    return fail('INTERNAL', '云函数异常：' + (err && err.message));
+    return unexpectedFail(err, 'patch_exception');
   }
 }
 
@@ -235,8 +226,7 @@ async function handleDelete(event) {
     const { data: found, error: findErr } = await repo.findById(id);
 
     if (findErr) {
-      log('delete_find_error', { error: findErr.message || JSON.stringify(findErr) });
-      return fail('INTERNAL', '数据库查询失败：' + (findErr.message || JSON.stringify(findErr)));
+      return dbFail('read', findErr, 'delete_find_error');
     }
     if (!found || found.length === 0) {
       log('delete_not_found', { id: id });
@@ -249,8 +239,7 @@ async function handleDelete(event) {
     const { error: delErr } = await repo.deleteById(id);
 
     if (delErr) {
-      log('delete_error', { error: delErr.message || JSON.stringify(delErr) });
-      return fail('INTERNAL', '数据库删除失败：' + (delErr.message || JSON.stringify(delErr)));
+      return dbFail('delete', delErr, 'delete_error');
     }
 
     log('delete_done', { id: id, name: snapshot.name, deletedRecords: snapshot.records.length });
@@ -265,8 +254,7 @@ async function handleDelete(event) {
       },
     };
   } catch (err) {
-    log('delete_exception', { message: err && err.message });
-    return fail('INTERNAL', '云函数异常：' + (err && err.message));
+    return unexpectedFail(err, 'delete_exception');
   }
 }
 

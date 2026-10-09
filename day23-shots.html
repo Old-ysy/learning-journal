@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day 23 截图页 · 密钥排查 + 错误提示统一</title>
+<style>
+  :root{
+    --ink:#1f2328; --sub:#57606a; --line:#d8dee4;
+    --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700;
+    --bg:#ffffff; --soft:#f6f8fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+    font-size:14px;line-height:1.6;}
+  .shot{max-width:960px;margin:0 auto 40px;padding:30px 34px;}
+  .shot + .shot{border-top:2px dashed var(--line);}
+  .head{display:flex;align-items:baseline;justify-content:space-between;
+    border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:16px;}
+  .head h1{font-size:19px;margin:0;letter-spacing:.5px;}
+  .head .tag{font-size:12px;color:var(--sub);}
+  h2{font-size:14px;margin:18px 0 8px;padding-left:9px;border-left:4px solid var(--ink);}
+  table{width:100%;border-collapse:collapse;margin:8px 0;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--soft);font-weight:600;font-size:13px;}
+  code{font-family:Consolas,"Courier New",monospace;font-size:12px;
+    background:var(--soft);padding:1px 4px;border-radius:3px;word-break:break-all;}
+  pre{white-space:pre-wrap;word-break:break-all;font-family:Consolas,"Courier New",monospace;
+    font-size:12px;background:var(--soft);padding:10px 12px;border-radius:6px;
+    margin:6px 0;line-height:1.55;}
+  .ok{color:var(--ok);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
+  .lbl{display:inline-block;min-width:92px;color:var(--sub);font-size:13px;}
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0;}
+  .cmp>div{border:1px solid var(--line);border-radius:6px;padding:10px 12px;}
+  .cmp .cap{font-size:12px;color:var(--sub);margin-bottom:6px;font-weight:600;}
+  .cmp .val{font-size:14px;font-weight:600;}
+  .arrow{text-align:center;font-size:20px;color:var(--sub);margin:2px 0;}
+  .note{background:var(--soft);border-left:3px solid var(--sub);
+    padding:8px 12px;margin:10px 0;font-size:13px;color:var(--sub);}
+  .good{background:#dafbe1;border-left:3px solid var(--ok);padding:8px 12px;margin:10px 0;font-size:13px;}
+  .warn{background:#fff8c5;border-left:3px solid var(--warn);padding:8px 12px;margin:10px 0;font-size:13px;}
+  .zero{font-size:26px;font-weight:700;color:var(--ok);letter-spacing:1px;}
+  footer{max-width:960px;margin:0 auto;padding:0 34px 36px;font-size:12px;color:var(--sub);}
+</style>
+</head>
+<body>
+
+<!-- ============ 截图 1：密钥排查 ============ -->
+<section class="shot">
+  <div class="head">
+    <h1>截图 1｜全仓库搜索密钥特征词：<span class="ok">0 条命中</span></h1>
+    <span class="tag">Day 23 ｜ 上线红线 ｜ 实测 2026-10-09 16:15</span>
+  </div>
+
+  <h2>① 扫的是什么</h2>
+  <pre>$ bash .workbuddy/tmp/scan-secrets.sh
+
+特征词覆盖：GitHub PAT（ghp_/github_pat_/gho_/ghu_/ghs_/ghr_）
+            OpenAI sk- ｜ 腾讯云 AKID ｜ AWS AKIA ｜ Slack xoxb- ｜ Google AIza
+            私钥文件头 BEGIN ... PRIVATE KEY ｜ 赋值形态 secret/api_key/password/token
+
+分三层扫：
+  A 层  git grep            —— 已被 git 跟踪的（会不会被推到远端）
+  B 层  grep -r             —— 工作区全部文件（含被 .gitignore 忽略的）
+  C 层  git log --all -S    —— 历史里有没有曾经提交过</pre>
+
+  <h2>② 结果</h2>
+  <table>
+    <tr><th style="width:80px">层</th><th style="width:210px">范围</th><th>命中</th></tr>
+    <tr><td><b>A 层</b></td><td>git 跟踪的文件</td><td class="zero">0 条</td></tr>
+    <tr><td><b>B 层</b></td><td>工作区全部文件（含被忽略的）</td><td class="zero">0 条</td></tr>
+    <tr><td><b>C 层</b></td><td>git 历史</td><td>1 处命中，已人工确认<b>不是密钥</b>（见下）</td></tr>
+  </table>
+
+  <div class="good">
+    <b>结论：工作区与仓库均无密钥特征词。</b> A / B 两层都是 0 条。
+  </div>
+
+  <h2>③ C 层那 1 处是什么</h2>
+  <pre>$ git log --all --oneline -S 'ghp_'
+05b8260 Day 6｜重建并追加项目规则
+
+$ git log --all -S '<真·PAT 完整前缀>' --oneline
+（空 —— 真实 PAT 从未进过历史）</pre>
+  <div class="warn">
+    命中的是 <code>AGENTS.md</code> 里那条自查规则本身：<code>grep ghp_ .git/config</code>。
+    是规则示例，不是真密钥（用完整前缀复核为空）。
+    Day 23 已把文档写法改成 <code>gh[p]_</code>，避免以后每次扫描都误报它。
+  </div>
+
+  <h2>④ 今天扫出来的真问题（已整改）</h2>
+  <table>
+    <tr><th style="width:230px">位置</th><th>问题</th><th>整改</th></tr>
+    <tr>
+      <td><code>.workbuddy/tmp/push.sh</code><br><code>.workbuddy/tmp/push9.sh</code></td>
+      <td>脚本里<b>硬编码了一整串 GitHub PAT</b>（<code>TOKEN='ghp_××××…'</code>）</td>
+      <td>改成 <code>TOKEN="${GITHUB_TOKEN:?缺少环境变量 GITHUB_TOKEN}"</code>，token 不再落盘</td>
+    </tr>
+    <tr>
+      <td><code>.workbuddy/memory/2026-09-26.md</code><br><code>.workbuddy/memory/2026-09-27.md</code></td>
+      <td>记忆文件里写了 PAT 明文片段</td>
+      <td>片段已抹掉，只保留事件本身</td>
+    </tr>
+  </table>
+  <div class="note">
+    这两个目录都在 <code>.gitignore</code> 里，所以 B 层扫得到、A 层扫不到 ——
+    但本地明文躺着同样是风险，所以照改。
+  </div>
+
+  <h2>⑤ .env 检查（三项）</h2>
+  <table>
+    <tr><th style="width:230px">检查项</th><th>结果</th></tr>
+    <tr><td>工作区里有没有 <code>.env</code> 类文件</td><td class="ok">无</td></tr>
+    <tr><td>git 是否跟踪了 <code>.env</code></td><td class="ok">未跟踪（0 条）</td></tr>
+    <tr><td><code>.env</code> 是否被忽略规则命中</td><td class="ok">命中：<code>.gitignore:10:.env</code></td></tr>
+    <tr><td><code>.git/config</code> 里的凭证</td><td class="ok">无（0 条）</td></tr>
+  </table>
+</section>
+
+<!-- ============ 截图 2：三类错误中文提示 ============ -->
+<section class="shot">
+  <div class="head">
+    <h1>截图 2｜三类错误全部返回中文人话</h1>
+    <span class="tag">Day 23 ｜ 线上实测 23/23 ｜ 本地 35/35</span>
+  </div>
+
+  <h2>① 今日一问：改的是哪句（改前 vs 改后）</h2>
+  <div class="cmp">
+    <div>
+      <div class="cap">改前 —— 裸报错直接甩给用户</div>
+      <div class="val bad">数据库删除失败：update or delete on
+        table "habits" violates foreign key
+        constraint "records_habit_id_fkey"
+        on table "records"</div>
+    </div>
+    <div>
+      <div class="cap">改后 —— 只给中文人话</div>
+      <div class="val ok">该数据仍被其它记录引用，暂不能删除</div>
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="note">
+    改前那句有两个毛病：<b>① 用户看不懂</b> —— 他要的是"现在该怎么办"；
+    <b>② 信息泄露</b> —— 表名（habits/records）、约束名（records_habit_id_fkey）全暴露到公网。
+    原文截断 300 字符后<b>只写进日志</b>，排查去云函数日志看。
+  </div>
+
+  <h2>② 三类错误 · 线上实测响应</h2>
+  <table>
+    <tr><th style="width:110px">类型</th><th style="width:120px">code</th><th>实际响应（公网实测）</th></tr>
+    <tr>
+      <td rowspan="5">参数错</td><td><code>BAD_REQUEST</code></td>
+      <td>POST <code>{"name":"   "}</code> → <b>习惯名称不能为空</b></td>
+    </tr>
+    <tr><td><code>BAD_REQUEST</code></td><td>POST 21 字 → <b>习惯名称最多 20 个字</b></td></tr>
+    <tr><td><code>BAD_REQUEST</code></td><td>GET <code>?limit=51</code> → <b>limit 必须是 1-50 的整数</b></td></tr>
+    <tr><td><code>BAD_REQUEST</code></td><td>DELETE 不带 id → <b>删除必须指定 id，不支持批量删除</b></td></tr>
+    <tr><td><code>BAD_REQUEST</code></td><td>POST 非 JSON → <b>请求体必须是合法的 JSON</b></td></tr>
+    <tr>
+      <td>资源不存在</td><td><code>NOT_FOUND</code></td>
+      <td>GET / PATCH / DELETE <code>?id=h_no_such_id</code> → <b>习惯不存在：h_no_such_id</b>（三个方法都说清是哪个，不静默）</td>
+    </tr>
+    <tr>
+      <td>服务端出错</td><td><code>INTERNAL</code></td>
+      <td>读失败 → <b>数据读取失败，请稍后重试</b>；删失败 → <b>数据删除失败，请稍后重试</b><br>
+          <span style="color:var(--sub)">（线上造不出真故障，这类由本地注入 7 种真实 PG 错误码验证，35/35）</span></td>
+    </tr>
+  </table>
+
+  <h2>③ 泄漏检查：响应里不许有技术词</h2>
+  <pre>检查词：permission / denied / violates / constraint / duplicate / timeout
+        ECONNREFUSED / habits / records / idx_ / _fkey / pg_ / postgres
+        syntax / relation / column
+
+    POST 空名字     | BAD_REQUEST | 习惯名称不能为空
+    POST 超长      | BAD_REQUEST | 习惯名称最多 20 个字
+    GET limit 越界 | BAD_REQUEST | limit 必须是 1-50 的整数
+    DELETE 无 id  | BAD_REQUEST | 删除必须指定 id，不支持批量删除
+    POST 非 JSON  | BAD_REQUEST | 请求体必须是合法的 JSON
+    GET 不存在     | NOT_FOUND   | 习惯不存在：h_no_such_id
+    PUT 不支持     | BAD_REQUEST | 不支持的请求方法：PUT
+
+  → ✅ 全部无技术词泄漏
+  → ✅ 全部是中文人话</pre>
+
+  <h2>④ 回归：增删改查仍然通（跑完库恢复原状）</h2>
+  <pre>基线条数：7
+新建：{"id":"h_mv0ou05qwi96","name":"Day23 错误提示验收",...}   ✅ 新增成功
+改名：{"name":{"from":"Day23 错误提示验收","to":"Day23 改后名字"}}  ✅ 改名成功
+删除：{"id":"h_mv0ou05qwi96","deletedRecords":0}              ✅ 删除成功
+删除后条数：7                                                 ✅ 回到基线，无残留
+GET 里已查不到该条                                            ✅</pre>
+
+  <div class="good">
+    <b>线上 23 通过 / 0 失败</b>，本地 35 通过 / 0 失败，老回归全绿
+    （Day11 13/13、Day12 23/23、Day13 43/43、Day14 19/19、Day19 75/75、Day19-diff 24/24、Day20 20/20、Day22 53/53）。
+  </div>
+</section>
+
+<footer>
+  Day 23 · 2026-10-09 · 习惯打卡器 learning-journal ｜
+  证据来源：<code>.workbuddy/tmp/scan-secrets.sh</code>（密钥扫描）、
+  <code>.workbuddy/tmp/collect-day23.js</code>（线上取证）、
+  <code>.workbuddy/tmp/test-day23.js</code>（本地单测）
+</footer>
+
+</body>
+</html>

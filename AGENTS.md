@@ -31,10 +31,19 @@
 
 ### R2：token / 密钥永不落盘
 > PAT 等凭证只允许临时拼在 remote URL 里用一次，push 完成后**立刻**重置回干净 URL，
-> 并用 `grep ghp_ .git/config` 验证无残留。凭证永不写进代码、commit、文档或记忆文件。
+> 并用 `grep -E 'gh[p]_' .git/config` 验证无残留。凭证永不写进代码、commit、文档或记忆文件。
+>
+> （写成 `gh[p]_` 字符类是为了让**这条规则本身**不被密钥扫描命中 —— Day 23 全仓库扫描时，
+> 它就是唯一一条命中项，虽然是示例不是真密钥，但会污染扫描结果。功能完全等价。）
 
 **防的情况**：凭证被写进文件 → 被 commit → 被 push 到公开仓库。
 一旦发生，撤销 token 之外还要清洗 git 历史，成本极高。预防远比补救便宜。
+
+**⚠️ Day 23 实测：这条规则自己被违反了。** 全仓库扫描发现 `.workbuddy/tmp/push.sh` 与
+`push9.sh` 里**硬编码了完整 PAT**（`TOKEN='...'`），另外两篇记忆文件里写了 PAT 的前几位。
+万幸 `.workbuddy/` 被 gitignore，token **从未进入 git 历史**（`git log --all -S` 已确认），
+远端是干净的。已按 R2 清除：脚本改为从环境变量 `GITHUB_TOKEN` 读取，记忆文件的明文片段已抹掉。
+该 token 仍建议去 GitHub 吊销 —— 明文落过盘就该当作已泄露处理。
 
 ### R3：push 成功必须以哈希一致为准
 > 「推送完成」的判定标准是：`git rev-parse HEAD` 与 `git ls-remote origin main`
