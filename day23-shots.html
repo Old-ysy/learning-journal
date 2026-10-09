@@ -199,6 +199,62 @@ GET 里已查不到该条                                            ✅</pre>
   </div>
 </section>
 
+<!-- ============ 附加块：余力加练（非必需，第三张截图） ============ -->
+<section class="shot">
+  <div class="head">
+    <h1>附加｜余力加练：请求日志补齐「结果」</h1>
+    <span class="tag">Day 23 ｜ 选做 ｜ 实测 2026-10-09</span>
+  </div>
+
+  <h2>① 先查现状：原来已经做了一半</h2>
+  <pre>index.js:33   log('request', { method, path })     ← 有方法、有路径
+lib/log.js    { step, detail, at: new Date().toISOString() }  ← 有时间
+
+对照任务卡「时间 / 路径 / 结果」三样：
+  时间 ✅ 有（at）   路径 ✅ 有（path）   结果 ❌ 缺</pre>
+  <div class="note">
+    所以这次不是从零加，是<b>把缺的那一半补上</b>。
+  </div>
+
+  <h2>② 改法</h2>
+  <pre>// 把方法分流抽成 dispatch(method, event)，main 里前后各记一条
+const startedAt = Date.now();
+log('request', { method, path });              // 进：时间 + 路径 + 方法
+const result = await dispatch(method, event);
+log('request_done', {                          // 出：补上「结果」+ 耗时
+  method, path,
+  ok:   result.ok === true,
+  code: (result &amp;&amp; result.error &amp;&amp; result.error.code) || null,
+  ms:   Date.now() - startedAt,
+});
+return result;</pre>
+
+  <h2>③ 实际打出来的日志</h2>
+  <pre>[habits] {"step":"request","detail":{"method":"POST","path":"/api/habits"},"at":"2026-10-09T08:14:06.940Z"}
+[habits] {"step":"request_done","detail":{"method":"POST","path":"/api/habits","ok":false,"code":"BAD_REQUEST","ms":3},"at":"2026-10-09T08:14:06.940Z"}
+[habits] {"step":"request_done","detail":{"method":"GET","path":"/api/habits","ok":true,"code":null,"ms":42},"at":"2026-10-09T08:14:07.102Z"}</pre>
+  <table>
+    <tr><th style="width:150px">任务卡要求的</th><th>落在哪个字段</th></tr>
+    <tr><td>时间</td><td><code>at</code>（ISO 8601）</td></tr>
+    <tr><td>路径</td><td><code>detail.path</code></td></tr>
+    <tr><td>结果</td><td><code>detail.ok</code> + <code>detail.code</code>（成功时 code 为 null）</td></tr>
+    <tr><td>（顺带）</td><td><code>detail.ms</code> —— 耗时，排查慢请求用</td></tr>
+  </table>
+
+  <h2>④ 一个刻意的取舍</h2>
+  <div class="warn">
+    <b>日志里只记结论，不记响应正文。</b> 打卡数据属于业务数据，没必要往日志里堆；
+    真要排查，有 <code>ok</code> / <code>code</code> / <code>ms</code> 三样就够定位了。
+  </div>
+
+  <h2>⑤ 任务卡里另一条「可选」回补：不用做</h2>
+  <div class="note">
+    任务卡写「可选：回补 Day 22 降级未完成的 DELETE 接口」。
+    但 Day 22 <b>没走降级</b> —— PATCH 和 DELETE 都上线了
+    （线上 15/15 + 级联验证 4/4，今天回归里 DELETE 仍然通），所以这条无事可做。
+  </div>
+</section>
+
 <footer>
   Day 23 · 2026-10-09 · 习惯打卡器 learning-journal ｜
   证据来源：<code>.workbuddy/tmp/scan-secrets.sh</code>（密钥扫描）、
