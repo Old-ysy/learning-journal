@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day 24 截图页 · 修复数据损坏崩溃</title>
+<style>
+  :root{
+    --ink:#1f2328; --sub:#57606a; --line:#d8dee4;
+    --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700;
+    --bg:#ffffff; --soft:#f6f8fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+    font-size:14px;line-height:1.6;}
+  .shot{max-width:960px;margin:0 auto 40px;padding:30px 34px;}
+  .shot + .shot{border-top:2px dashed var(--line);}
+  .head{display:flex;align-items:baseline;justify-content:space-between;
+    border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:16px;}
+  .head h1{font-size:19px;margin:0;letter-spacing:.5px;}
+  .head .tag{font-size:12px;color:var(--sub);}
+  h2{font-size:14px;margin:18px 0 8px;padding-left:9px;border-left:4px solid var(--ink);}
+  table{width:100%;border-collapse:collapse;margin:8px 0;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--soft);font-weight:600;font-size:13px;}
+  code{font-family:Consolas,"Courier New",monospace;font-size:12px;
+    background:var(--soft);padding:1px 4px;border-radius:3px;word-break:break-all;}
+  pre{white-space:pre-wrap;word-break:break-all;font-family:Consolas,"Courier New",monospace;
+    font-size:12px;background:var(--soft);padding:10px 12px;border-radius:6px;
+    margin:6px 0;line-height:1.55;}
+  .ok{color:var(--ok);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
+  .note{background:var(--soft);border-left:3px solid var(--sub);
+    padding:8px 12px;margin:10px 0;font-size:13px;color:var(--sub);}
+  .good{background:#dafbe1;border-left:3px solid var(--ok);padding:8px 12px;margin:10px 0;font-size:13px;}
+  .warn{background:#fff8c5;border-left:3px solid var(--warn);padding:8px 12px;margin:10px 0;font-size:13px;}
+  /* 仿浏览器地址栏 */
+  .bar{display:flex;align-items:center;gap:8px;background:#eef1f4;border:1px solid var(--line);
+    border-radius:8px;padding:7px 10px;margin:10px 0;}
+  .dots{display:flex;gap:5px;}
+  .dots i{width:10px;height:10px;border-radius:50%;display:block;}
+  .dot-r{background:#ff5f57}.dot-y{background:#febc2e}.dot-g{background:#28c840}
+  .url{flex:1;background:#fff;border:1px solid var(--line);border-radius:5px;
+    padding:3px 9px;font-family:Consolas,monospace;font-size:12px;color:#24292f;}
+  /* 仿 DevTools 控制台 */
+  .console{background:#1e1e1e;border-radius:8px;padding:10px 12px;margin:10px 0;
+    font-family:Consolas,"Courier New",monospace;font-size:12px;line-height:1.7;}
+  .console .hdr{color:#9aa0a6;border-bottom:1px solid #333;padding-bottom:5px;margin-bottom:7px;font-size:11px;}
+  .c-err{color:#f48771;}
+  .c-log{color:#d4d4d4;}
+  .c-dim{color:#6e7681;}
+  .c-url{color:#7aa2f7;text-decoration:underline;}
+  .bracket{color:#dcdcaa;}
+  /* 页面白板 */
+  .page{border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:8px 0;background:#fff;}
+  .page .row{display:flex;align-items:center;gap:8px;margin:6px 0;}
+  .page .app-title{font-size:16px;font-weight:700;}
+  .page .muted{color:#8b949e;font-size:12px;}
+  .page .inp{border:1px solid #d0d7de;border-radius:6px;padding:5px 8px;color:#8b949e;
+    font-size:12px;flex:1;background:#f6f8fa;}
+  .page .btn{background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;padding:5px 10px;font-size:12px;}
+  .blank{border:2px dashed var(--bad);border-radius:6px;padding:22px;text-align:center;
+    color:var(--bad);font-size:13px;background:#fff5f5;margin:10px 0;}
+  .card{border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:8px 0;text-align:center;}
+  .card .emoji{font-size:24px;}
+  .card .card-title{font-weight:700;margin:4px 0;}
+  .card .card-hint{color:var(--sub);font-size:13px;}
+  .card .card-btn{border:1px solid var(--line);border-radius:6px;padding:4px 14px;
+    display:inline-block;margin-top:8px;background:#f6f8fa;font-size:13px;}
+  footer{max-width:960px;margin:0 auto;padding:0 34px 36px;font-size:12px;color:var(--sub);}
+</style>
+</head>
+<body>
+
+<!-- ============ 截图 1：Bug 现场 ============ -->
+<section class="shot">
+  <div class="head">
+    <h1>截图 1｜控制台报错原文 + 页面一片空白</h1>
+    <span class="tag">Day 24 · 修复前 · 实测 2026-10-10</span>
+  </div>
+
+  <h2>① 怎么复现的</h2>
+  <pre>把 localStorage 里的数据弄坏（模拟「存到一半被截断」的真实场景），然后打开页面：
+
+localStorage.setItem('habits', '{habits:[{id:"h_1",nam')   ← JSON 截断了，解析不了
+location.reload()</pre>
+
+  <h2>② 地址栏</h2>
+  <div class="bar">
+    <span class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></span>
+    <span class="url">http://127.0.0.1:8024/index.html</span>
+  </div>
+
+  <h2>③ F12 控制台里的报错原文</h2>
+  <div class="console">
+    <div class="hdr">Console · Errors only</div>
+    <div class="c-dim">▼ <span class="c-log">读取本地数据失败，已忽略：</span> SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)</div>
+    <div class="c-err"><b>Uncaught SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)</b></div>
+    <div class="c-dim">&nbsp;&nbsp;&nbsp;&nbsp;at load (<span class="c-url">app.js:122:23</span>)</div>
+    <div class="c-dim">&nbsp;&nbsp;&nbsp;&nbsp;at loadWithState (<span class="c-url">app.js:752:3</span>)</div>
+    <div class="c-dim">&nbsp;&nbsp;&nbsp;&nbsp;at bootstrap (<span class="c-url">app.js:692:8</span>)</div>
+    <div class="c-dim">&nbsp;&nbsp;&nbsp;&nbsp;at <span class="c-url">app.js:758:1</span></div>
+  </div>
+  <div class="note">
+    第一行是代码里主动打的 <code>console.error</code>；<b>第二行 Uncaught 才是真问题</b> —— 说明这个异常<b>没人接</b>。
+    栈顶 <code>app.js:122</code> 就是 <b><code>JSON.parse(raw)</code></b> 那一行。后三行是调用链，和实际源码位置对得上。
+  </div>
+
+  <h2>④ 用户实际看到的页面</h2>
+  <div class="page">
+    <div class="row"><span class="app-title">今日打卡</span></div>
+    <div class="row"><span class="muted">2026-10-10 星期六</span></div>
+    <div class="row"><span class="muted">列表 · 统计</span></div>
+    <div class="row"><span class="inp">想坚持什么？比如：跑步 30 分钟</span><span class="btn">+ 添加</span></div>
+    <div class="blank">
+      这里本该是习惯列表<br>（实际一片空白：列表没渲染，错误卡片也没显示）
+    </div>
+  </div>
+  <div class="warn">
+    最阴的地方：页面<b>看起来只是空的</b>，没有任何出错提示。<br>
+    如果这时继续添加习惯，<code>save()</code> 会用新数据盖掉坏数据，看起来「好了」——
+    但<b>之前所有记录永久丢失，全程无提示</b>。
+  </div>
+</section>
+
+<!-- ============ 截图 2：修复后 ============ -->
+<section class="shot">
+  <div class="head">
+    <h1>截图 2｜修复后：如实报错 + 能自救</h1>
+    <span class="tag">Day 24 · 修复后 · 同一套用例复测</span>
+  </div>
+
+  <h2>① 同一个操作，控制台不再炸</h2>
+  <div class="bar">
+    <span class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></span>
+    <span class="url">http://127.0.0.1:8024/index.html</span>
+  </div>
+  <div class="console">
+    <div class="hdr">Console</div>
+    <div class="c-dim">▼ 读取本地数据失败，已忽略： SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)</div>
+    <div class="c-dim">▼ 本地数据读取失败，已切到错误状态： SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)</div>
+    <div class="c-dim">&nbsp;&nbsp;<span style="color:#28c840">（没有 Uncaught —— 异常被接住了）</span></div>
+  </div>
+
+  <h2>② 页面如实说话了</h2>
+  <div class="card">
+    <div class="emoji">⚠️</div>
+    <div class="card-title">数据加载失败</div>
+    <div class="card-hint">本地数据读取失败，数据可能已损坏。可重试，或清空后重新开始。</div>
+    <div class="card-btn">重试</div>
+  </div>
+  <div class="good">
+    这就是 Day 13 专门做好的那张错误卡片 —— 建的时候是摆设，<b>今天第一次真正派上用场</b>。
+  </div>
+
+  <h2>③ 点「重试」能真的走出去</h2>
+  <pre>点「重试」→ 弹确认框：本地数据已损坏，无法正常读取。要清空损坏的数据并重新开始吗？
+                        （原来的记录将无法找回）
+点「确定」→ 坏数据已清除 ✅   错误卡片消失 ✅   回到空列表正常使用 ✅</pre>
+  <div class="note">
+    为什么要有这一步：坏数据还躺在 localStorage 里，光重试每次都会再抛同一个错，
+    永远出不来。删数据要用户点头，不自作主张。
+  </div>
+
+  <h2>④ 修复前 vs 修复后</h2>
+  <table>
+    <tr><th style="width:170px">观察点</th><th>修复前</th><th>修复后</th></tr>
+    <tr><td>控制台</td><td class="bad">Uncaught SyntaxError</td><td class="ok">无未捕获异常</td></tr>
+    <tr><td>render() 有没有跑</td><td class="bad">没跑（被中断）</td><td class="ok">跑了</td></tr>
+    <tr><td>错误卡片</td><td class="bad">不显示</td><td class="ok">显示 + 中文说明</td></tr>
+    <tr><td>列表区域</td><td class="bad">一片空白</td><td class="ok">明确的失败提示</td></tr>
+    <tr><td>用户能不能恢复</td><td class="bad">不能（还可能丢数据）</td><td class="ok">能，点重试清空重来</td></tr>
+  </table>
+</section>
+
+<!-- ============ 附加：排错过程（今日一问） ============ -->
+<section class="shot">
+  <div class="head">
+    <h1>附加｜今日一问：怎么排除掉其他原因、锁定真正原因的</h1>
+    <span class="tag">Day 24 · 选做</span>
+  </div>
+
+  <h2>① 先证伪：把「看起来可疑」的一条条打掉</h2>
+  <table>
+    <tr><th style="width:200px">怀疑对象</th><th>怎么验的</th><th>结果</th></tr>
+    <tr><td>超长输入没拦住</td><td>绕过 maxlength 塞 500 字</td><td class="ok">正常截断到 20 字</td></tr>
+    <tr><td>空白输入被写进去</td><td>提交纯空格</td><td class="ok">条数不变</td></tr>
+    <tr><td>XSS 注入</td><td>提交 <code>&lt;img src=x onerror=alert(1)&gt;</code></td><td class="ok">被转义，没变成标签</td></tr>
+    <tr><td>emoji 被切成半个代理对</td><td>提交家庭组合 emoji</td><td class="ok">6 code unit 完整</td></tr>
+    <tr><td>快速连点出竞态</td><td>连点 checkbox 6 次</td><td class="ok">正常交替</td></tr>
+    <tr><td>筛选框正则特殊字符</td><td>输入 <code>.*+?^${}()|[]\</code></td><td class="ok">当普通字符串处理</td></tr>
+    <tr><td>深链 id 不存在</td><td><code>?view=detail&amp;habit=乱填</code></td><td class="ok">显示「习惯不存在」</td></tr>
+    <tr><td>超 12 个上限</td><td>加到第 13 个</td><td class="ok">正确拦截</td></tr>
+  </table>
+  <div class="warn">
+    这八条<b>全过了，一条都没异常</b>。常规输入打不穿，说明 Bug 不在「用户输入」这一层。
+  </div>
+
+  <h2>② 换方向：不打输入，打「启动时读到的东西」</h2>
+  <p>既然输入层干净，就把怀疑放到<b>持久化层</b> —— 页面启动时从 localStorage 读回来的那段数据。
+     把三种坏数据形态灌进去：</p>
+  <table>
+    <tr><th style="width:220px">脏数据形态</th><th>结果</th></tr>
+    <tr><td>JSON 写了一半被截断</td><td class="bad">炸，Uncaught SyntaxError</td></tr>
+    <tr><td>合法 JSON 但 habits 不是数组</td><td class="ok">不炸（有 Array.isArray 兜着）</td></tr>
+    <tr><td>顶层是 null</td><td class="ok">不炸</td></tr>
+  </table>
+  <div class="note">
+    只有第一种炸 —— 说明<b>问题在「解析失败」这条路径，不在「结构不对」</b>。范围进一步收窄。
+  </div>
+
+  <h2>③ 顺着调用链找谁该负责</h2>
+  <pre>app.js:758  bootstrap();                  ← 顶层调用
+app.js:692    else loadWithState();
+app.js:752      load();                     ← 三层里一个 try/catch 都没有
+app.js:122        JSON.parse(raw);          ← 抛错点</pre>
+  <p>看 <code>load()</code> 自己的注释：<b>「让上层决定显示 error 状态」</b> —— 意图写得明明白白，
+     但上三层<b>一个都没接</b>。所以：</p>
+  <ul>
+    <li>异常无人接管 → 变成 Uncaught</li>
+    <li><code>bootstrap()</code> 从 752 行中断 → 后面的 <code>render()</code> / <code>applyRoute()</code> 不执行</li>
+    <li>结果就是截图 1 那片空白</li>
+  </ul>
+
+  <h2>④ 差点误判的一次（值得记下来）</h2>
+  <div class="warn">
+    第一次复现时看到页面显示<b>「还没有习惯，从第一个开始吧」</b>，差点当成「数据静默丢失」的 Bug。<br>
+    查下去才发现：测试工具的每次 <code>open</code> 都是全新浏览器上下文，<b>localStorage 根本不跨会话</b>，
+    写进去的脏数据在下次打开时早没了 —— 那是<b>测试假象</b>。<br>
+    改成「在同一次页面存活期内完成注入 + 重载」才拿到真结果。<br>
+    <b>教训：复现失败要先怀疑复现方法本身，别急着改代码。</b>
+  </div>
+
+  <h2>⑤ 回归验证</h2>
+  <pre>老回归 305 项全绿：
+  Day11 13/13 · Day12 23/23 · Day13 43/43 · Day14 19/19 · Day19 75/75
+  Day19-diff 24/24 · Day20 20/20 · Day22 53/53 · Day23 35/35
+
+修复后重跑上面那 8 条刁钻输入：结果与修复前<b>逐条一致</b> —— 精准修复，零副作用。</pre>
+</section>
+
+<footer>
+  Day 24 · 2026-10-10 · 习惯打卡器 learning-journal ｜
+  复现脚本：<code>.workbuddy/tmp/probe-day24.sh</code>（刁钻输入）·
+  <code>.workbuddy/tmp/init-hook-day24.js</code>（页面 JS 之前注入的报错钩子）
+</footer>
+
+</body>
+</html>

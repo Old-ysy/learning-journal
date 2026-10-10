@@ -70,6 +70,9 @@ var listState = 'normal';      // normal | loading | empty | error
 // Day 20：error 卡片上那句话现在有两种来源（本地读取失败 / 云端读取失败），
 // 所以抽成变量，由触发失败的一方写入
 var listErrorMessage = '本地数据读取失败，请检查浏览器存储权限或重试';
+// Day 24：本地数据是否已损坏（读都读不出来）。损坏时光点重试救不回来，
+// 坏数据还在 localStorage 里，每次 load() 都会再抛一次 —— 需要一条清空重来的路。
+var hasCorruptData = false;
 var currentHabitId = null;     // detail 视图用
 // Day 14 修复：应用内有没有可返回的页面。
 // 深链直达（?view=detail 直接打开）时为 false，返回按钮不能走 history.back()，否则会退出应用。
@@ -596,6 +599,17 @@ crumbBackEl.addEventListener('click', function () {
 
 // error 状态的重试按钮：按当前数据源重试
 errorRetryEl.addEventListener('click', function () {
+  // Day 24：损坏数据导致的失败，光重试救不回来 —— 坏数据还躺在 localStorage 里，
+  // 每次 load() 都会再抛一次同一个错。所以这里给用户一条真正能走出去的路：
+  // 确认之后清空重来。删数据要用户点头，不自作主张。
+  if (hasCorruptData) {
+    var yes = window.confirm(
+      '本地数据已损坏，无法正常读取。\n\n要清空损坏的数据并重新开始吗？\n（原来的记录将无法找回）'
+    );
+    if (!yes) return;
+    localStorage.removeItem(STORAGE_KEY);
+    hasCorruptData = false;
+  }
   bootstrap();
 });
 
@@ -749,9 +763,35 @@ function loadWithState() {
   }
 
   // 正常路径
-  load();
-  render();
+  //
+  // Day 24 修复：load() 读到损坏数据会抛错，而这条链路上原本**没人接** ——
+  //     顶层 renderDate(); bootstrap();
+  //       → bootstrap() → loadWithState() → load()  ← 三层都没有 try/catch
+  //   异常一路冒出去变成「未捕获异常」，bootstrap() 从 load() 那一行直接中断，
+  //   后面的 render() / applyRoute() 全部不执行：列表一片空白，
+  //   而 Day 13 专门为此做的 error 卡片 + 重试按钮也永远等不到上场。
+  //   load() 里那句注释写着「让上层决定显示 error 状态」——上层确实该决定，以前是忘了。
+  var loadErr = null;
+  try {
+    load();
+  } catch (err) {
+    loadErr = err;
+  }
+
+  // 无论读写成功与否，都先把视图按 URL 定好
   applyRoute();
+
+  if (loadErr) {
+    console.error('本地数据读取失败，已切到错误状态：', loadErr);
+    hasCorruptData = true;
+    // ⚠️ 顺序不能反：applyRoute() 会重读 URL 的 state 参数覆盖 listState，
+    //    所以必须在 applyRoute() 之后再设 error，否则会被冲回 normal（和 loadFromCloud 同一个坑）。
+    listState = 'error';
+    listErrorMessage = '本地数据读取失败，数据可能已损坏。可重试，或清空后重新开始。';
+  }
+
+  render();
+  renderRoute();
 }
 
 renderDate();
