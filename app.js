@@ -118,6 +118,34 @@ function fetchHabits() {
 
 /* ---------- 持久化（F5） ---------- */
 
+// Day 24 余力：写盘这一层之前也没人接异常 —— 和主任务那个 Bug 是同一个疏漏。
+//
+// localStorage 写被拒其实很常见：Safari 隐私模式直接禁用 Storage、配额写满、
+// 站点策略黑名单 —— 抛的都是 setItem 这一句的 DOMException。
+// 而 addHabit / toggleHabit / deleteHabit 三个调用点全是「save(); render();」连写，
+// save 一抛，render() 就不执行了：
+//   用户点了「添加」→ 界面纹丝不动 → 输入框的字还留着 → 连句提示都没有。
+//   他会以为没点上，再点一次 —— 第一条其实已经进了内存 state.habits，
+//   于是越点越多，刷新之后一条都不剩。
+//
+// 失败状态刻意不塞进 addHabit / toggleHabit 的返回值：
+// 那两个返回对象是 Day 11 回归测试的断言目标，加字段会连带让旧断言失效。
+// 改用模块级标记传递，由调用方自己决定怎么提示。
+var storageWritable = true;
+
+function save() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ habits: state.habits }));
+    storageWritable = true;
+    return true;
+  } catch (err) {
+    // 原文只进控制台，界面上给人话
+    console.error('写入本地数据失败：', err);
+    storageWritable = false;
+    return false;
+  }
+}
+
 function load() {
   try {
     var raw = localStorage.getItem(STORAGE_KEY);
@@ -131,10 +159,6 @@ function load() {
     console.error('读取本地数据失败，已忽略：', err);
     throw err;                          // Day 13：让上层决定显示 error 状态
   }
-}
-
-function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ habits: state.habits }));
 }
 
 /* ---------- streak 计算（F3） ---------- */
@@ -189,6 +213,8 @@ function addHabit(name) {
 
   save();
   render();
+  // 写失败不回滚：数据已经在内存里了，先让人看得见，再把风险说清楚
+  if (!storageWritable) showHint('已添加，但没能保存到本地（刷新会丢失）');
   return { ok: true };
 }
 
@@ -228,14 +254,18 @@ function handleToggle(id) {
   if (!result) return result;
 
   if (result.checked) {
-    showHint('已打卡 · 连续 ' + result.streak + ' 天');
+    showHint(storageWritable
+      ? '已打卡 · 连续 ' + result.streak + ' 天'
+      : '打卡已生效，但没能保存到本地（刷新会丢失）');
     var li = listEl.querySelector('[data-id="' + id + '"]');
     if (li) {
       var badge = li.querySelector('.habit-streak');
       if (badge) badge.classList.add('is-pulse');
     }
   } else {
-    showHint('已取消今日打卡');
+    showHint(storageWritable
+      ? '已取消今日打卡'
+      : '已取消，但没能保存到本地（刷新会丢失）');
   }
   return result;
 }
@@ -246,6 +276,7 @@ function deleteHabit(id) {
   });
   save();
   render();
+  if (!storageWritable) showHint('已删除，但没能保存到本地（刷新会恢复）');
 }
 
 /* ---------- 渲染 ---------- */
@@ -618,7 +649,8 @@ formEl.addEventListener('submit', function (event) {
   var result = addHabit(inputEl.value);
   if (result.ok) {
     inputEl.value = '';
-    showHint('');
+    // 写盘失败时别用空字符串把刚才那句警告冲掉
+    if (storageWritable) showHint('');
   } else if (result.message) {
     showHint(result.message);
   }

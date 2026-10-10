@@ -240,10 +240,91 @@ app.js:122        JSON.parse(raw);          ← 抛错点</pre>
 修复后重跑上面那 8 条刁钻输入：结果与修复前<b>逐条一致</b> —— 精准修复，零副作用。</pre>
 </section>
 
+<section class="shot">
+  <div class="head">
+    <h1>余力加练｜第二个 Bug：写盘也没人兜底</h1>
+    <span class="tag">和主任务同一个疏漏家族</span>
+  </div>
+
+  <div class="note">
+    主任务修的是「<b>读</b>坏了怎么办」。顺着同一条思路往回看，<b>写</b>那一层同样裸着：
+    <code>save()</code> 里只有一句 <code>localStorage.setItem(...)</code>，没有 try/catch；
+    而 addHabit / toggleHabit / deleteHabit 三个调用点全是 <code>save(); render();</code> 连着写
+    —— save 一抛，render() 就跟着不执行了。
+  </div>
+
+  <h2>① 怎么复现的</h2>
+  <p>真实世界 <code>setItem</code> 被拒很常见：Safari 隐私模式禁用 Storage、配额写满、
+     站点策略把 Storage 划进黑名单 —— 抛的都是这一句的 DOMException。
+     在页面 JS 之前注入一句「写必失败」来模拟配额超限：</p>
+  <pre>Storage.prototype.setItem = function () {
+  throw new DOMException(
+    "Failed to execute 'setItem' on 'Storage': Setting the value of 'habits' exceeded the quota.",
+    'QuotaExceededError'
+  );
+};</pre>
+
+  <h2>② 修复前：点了完全没反应</h2>
+  <div class="console">
+    <div class="hdr">Console ▾ 1 error</div>
+    <div><span class="c-err">Uncaught QuotaExceededError: Failed to execute 'setItem' on 'Storage':
+      Setting the value of 'habits' exceeded the quota.</span> <span class="c-dim">@ app.js:136</span></div>
+  </div>
+
+  <table>
+    <tr><th style="width:150px">点了「添加」之后</th><th>修复前</th><th>修复后</th></tr>
+    <tr><td>列表</td><td class="bad">0 项，纹丝不动</td><td class="ok">1 项，正常出现</td></tr>
+    <tr><td>提示</td><td class="bad">空，一句都没有</td><td class="ok">「已添加，但没能保存到本地（刷新会丢失）」</td></tr>
+    <tr><td>输入框</td><td class="bad">「晨跑」还留在框里</td><td class="ok">正常清空</td></tr>
+    <tr><td>控制台</td><td class="bad">Uncaught（未捕获）</td><td class="ok">只是 console.error</td></tr>
+  </table>
+
+  <div class="warn">
+    最狠的是这个：第一条<b>其实已经进了内存</b>，但界面毫无动静。用户会以为没点上、再点一次
+    —— 于是越点越多，刷新之后一条都不剩。
+  </div>
+
+  <h2>③ 修复：不回滚，但把风险说清楚</h2>
+  <pre>function save() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ habits: state.habits }));
+    storageWritable = true;
+    return true;
+  } catch (err) {
+    console.error('写入本地数据失败：', err);   // 原文只进控制台
+    storageWritable = false;                    // 界面上给人话
+    return false;
+  }
+}</pre>
+  <ul>
+    <li>写失败<b>不回滚</b>：数据已经在内存里了，先让人看得见</li>
+    <li>失败状态<b>不塞进返回值</b>：<code>addHabit</code> / <code>toggleHabit</code> 的返回对象是
+        Day 11 回归测试的断言目标，加字段会连带让旧断言失效 —— 改用模块级标记传递</li>
+    <li>三条路径各给一句人话：添加 / 打卡 / 删除</li>
+  </ul>
+
+  <h2>④ 验证</h2>
+  <div class="good">
+    R1 添加、R2 勾选、R3 删除三条用例全过 —— 列表正常、提示到位、不再有 Uncaught。<br>
+    老回归 305 项依旧全绿。
+  </div>
+
+  <h2>⑤ 中途被自己坑了一次</h2>
+  <div class="note">
+    改完重跑，结果<b>跟没修复一模一样</b>。查了三轮才抓到：文件里<b>有两个同名 <code>save()</code></b>
+    （编辑时旧的那个没删干净），JS 里后声明覆盖先声明，所以一直跑的是旧版。<br>
+    而 <code>node --check</code> 一声不响 —— 重复函数声明在语法上完全合法。<br>
+    <b>教训：改完要确认跑的到底是哪份代码，别信「文件我改过了」。</b>
+  </div>
+</section>
+
 <footer>
   Day 24 · 2026-10-10 · 习惯打卡器 learning-journal ｜
-  复现脚本：<code>.workbuddy/tmp/probe-day24.sh</code>（刁钻输入）·
-  <code>.workbuddy/tmp/init-hook-day24.js</code>（页面 JS 之前注入的报错钩子）
+  复现脚本：
+  <code>.workbuddy/tmp/probe-day24.sh</code>（刁钻输入）·
+  <code>.workbuddy/tmp/init-hook-day24.js</code>（报错钩子）·
+  <code>.workbuddy/tmp/probe-day24b.sh</code>（余力加练·写盘失败）·
+  <code>.workbuddy/tmp/init-hook-day24b.js</code>（注入 QuotaExceededError）
 </footer>
 
 </body>
