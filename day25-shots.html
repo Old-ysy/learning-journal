@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day 25 截图页 · 发布前检查 Skill</title>
+<style>
+  :root{
+    --ink:#1f2328; --sub:#57606a; --line:#d8dee4;
+    --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700;
+    --bg:#ffffff; --soft:#f6f8fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+    font-size:14px;line-height:1.6;}
+  .shot{max-width:960px;margin:0 auto 40px;padding:30px 34px;}
+  .shot + .shot{border-top:2px dashed var(--line);}
+  .head{display:flex;align-items:baseline;justify-content:space-between;
+    border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:16px;}
+  .head h1{font-size:19px;margin:0;letter-spacing:.5px;}
+  .head .tag{font-size:12px;color:var(--sub);}
+  h2{font-size:14px;margin:18px 0 8px;padding-left:9px;border-left:4px solid var(--ink);}
+  table{width:100%;border-collapse:collapse;margin:8px 0;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--soft);font-weight:600;font-size:13px;}
+  code{font-family:Consolas,"Courier New",monospace;font-size:12px;
+    background:var(--soft);padding:1px 4px;border-radius:3px;word-break:break-all;}
+  pre{white-space:pre-wrap;word-break:break-all;font-family:Consolas,"Courier New",monospace;
+    font-size:12px;background:var(--soft);padding:10px 12px;border-radius:6px;
+    margin:6px 0;line-height:1.55;}
+  .ok{color:var(--ok);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
+  .note{background:var(--soft);border-left:3px solid var(--sub);
+    padding:8px 12px;margin:10px 0;font-size:13px;color:var(--sub);}
+  .good{background:#dafbe1;border-left:3px solid var(--ok);padding:8px 12px;margin:10px 0;font-size:13px;}
+  .warn{background:#fff8c5;border-left:3px solid var(--warn);padding:8px 12px;margin:10px 0;font-size:13px;}
+  .console{background:#1e1e1e;border-radius:8px;padding:12px 14px;margin:10px 0;
+    font-family:Consolas,"Courier New",monospace;font-size:12px;line-height:1.75;color:#d4d4d4;}
+  .console .hdr{color:#9aa0a6;border-bottom:1px solid #333;padding-bottom:5px;margin-bottom:8px;font-size:11px;}
+  .c-p{color:#3fb950;font-weight:600}
+  .c-f{color:#f85149;font-weight:600}
+  .c-dim{color:#6e7681}
+  .c-cmd{color:#7aa2f7}
+  .c-y{color:#e3b341}
+</style>
+</head>
+<body>
+
+<!-- ===================== 图 1：主图 ===================== -->
+<section class="shot">
+  <div class="head">
+    <h1>发布前检查 Skill 实跑结果</h1>
+    <span class="tag">Day 25 · 故意留的问题被它查出来了</span>
+  </div>
+
+  <h2>① 先跑一遍基线（没动过手脚）</h2>
+  <div class="console">
+    <div class="hdr">$ bash preflight-check.sh</div>
+    <div class="c-dim">① 密钥 · 工作区扫描</div>
+    <div><span class="c-p">[PASS]</span> 工作区没有疑似密钥（脱敏文本不算命中）</div>
+    <div class="c-dim">⑥ 线上代码是最新（本地改动已经部署上去）</div>
+    <div><span class="c-f">[FAIL]</span> 线上跑的不是本地这份代码</div>
+    <div class="c-dim">          本地 md5 af44e6973304… / 线上 md5 4ea30ae218ea…</div>
+    <div class="c-dim">          → 改完代码别忘了重新部署，页面能开 ≠ 代码是最新的</div>
+    <div><span class="c-dim">结果：</span><span class="c-p">6 通过</span> / <span class="c-f">1 失败</span></div>
+  </div>
+  <div class="note">
+    第 ⑥ 项这条是<b>真问题，不是我故意的</b> —— Day 24 改的 app.js 一直没重新部署，
+    而页面照常能打开，肉眼根本看不出来。这正说明需要这个 Skill。
+  </div>
+
+  <h2>② 故意弄坏一项：往工作区塞一个假密钥</h2>
+  <pre># .workbuddy/tmp/sabotage-fake-key.txt（假串，EXAMPLEFAKE，不是真凭证）
+const TOKEN = 'ghp_EXAMPLEFAKE0123456789abcdefghijkl';</pre>
+
+  <h2>③ 再跑一遍 —— 它被查出来了</h2>
+  <div class="console">
+    <div class="hdr">$ bash preflight-check.sh</div>
+    <div class="c-dim">① 密钥 · 工作区扫描</div>
+    <div><span class="c-f">[FAIL]</span> 工作区发现疑似密钥，1 处：</div>
+    <div class="c-y">          ./.workbuddy/tmp/sabotage-fake-key.txt:3:const TOKEN = 'ghp_EXAMPLEFAKE…';</div>
+    <div class="c-dim">② 密钥 · git 历史扫描</div>
+    <div><span class="c-p">[PASS]</span> 全部历史分支里没有「真密钥形态」的串</div>
+    <div class="c-dim">③④⑤⑦ …</div>
+    <div><span class="c-p">[PASS]</span> 首页 200 · 接口 ok:true · 资源无 404</div>
+    <div><span class="c-dim">结果：</span><span class="c-p">6 通过</span> / <span class="c-f">2 失败</span></div>
+  </div>
+  <div class="good">
+    <b>精确到文件名 + 行号 + 内容</b> —— 不是笼统报「有风险」，是能直接照着去改。<br>
+    而且它没有被我那句「这是测试夹具」的注释骗过去。
+  </div>
+
+  <h2>④ 把假密钥删掉，再跑一次</h2>
+  <div class="console">
+    <div class="hdr">$ rm .workbuddy/tmp/sabotage-fake-key.txt &amp;&amp; bash preflight-check.sh</div>
+    <div><span class="c-p">[PASS]</span> 工作区没有疑似密钥（脱敏文本不算命中）</div>
+    <div><span class="c-dim">结果：</span><span class="c-p">6 通过</span> / <span class="c-f">1 失败</span>　<span class="c-dim">← 只剩第 ⑥ 项那条真问题</span></div>
+  </div>
+  <div class="warn">
+    这一趟最关键：<b>它能变回 PASS</b>。只会永远报红的检查等于没有检查 ——
+    能报红、也能转绿，才说明它看的是真实状态，不是写死的结论。
+  </div>
+</section>
+
+<!-- ===================== 图 2：设计 + 今日一问 ===================== -->
+<section class="shot">
+  <div class="head">
+    <h1>检查项怎么定的 · 以及修掉的一个误报</h1>
+    <span class="tag">Day 25 · 板块①规划 / 板块②制作</span>
+  </div>
+
+  <h2>七项检查，分三组</h2>
+  <table>
+    <tr><th style="width:60px">组</th><th style="width:210px">检查项</th><th>为什么它必须进发布前检查</th></tr>
+    <tr><td rowspan="3">安全</td><td>① 密钥 · 工作区扫描</td><td>漏一次就是公开仓库裸奔，且<b>撤销成本极高</b></td></tr>
+    <tr><td>② 密钥 · git 历史扫描</td><td>删文件没用，历史里还在 —— 很多人只查当前文件</td></tr>
+    <tr><td>③ .env 未入库且被忽略</td><td>查的是「gitignore 有没有真的挡住」，不是「文件在不在」</td></tr>
+    <tr><td rowspan="3">公网</td><td>④ 首页可达</td><td>托管没部署 / 域名失效，本地怎么试都发现不了</td></tr>
+    <tr><td>⑤ 接口健康（ok:true）</td><td>首页 200 但接口挂了，页面看起来只是「没数据」</td></tr>
+    <tr><td>⑥ 线上代码是最新</td><td><b>比 md5，不看文件大小</b>：页面能开 ≠ 代码是最新的</td></tr>
+    <tr><td>资源</td><td>⑦ 线上引用无 404</td><td>css/js 404 只是变丑、不报错，最容易蒙混过关</td></tr>
+  </table>
+
+  <h2>今天修掉的一个误报（Skill 自己也需要被验证）</h2>
+  <div class="note">
+    第一次实跑时 ② 项报 FAIL，指着 Day 23 和 Day 6 两个提交。查下去发现命中的是
+    <code>grep ghp_ .git/config</code> 这条<b>规则文本本身</b>和截图页里的 <code>ghp_××××…</code>
+    <b>脱敏展示</b> —— 真密钥一条没有，远端是干净的。<br>
+    于是把判定收紧成两段：<b>先</b>用 <code>git log -S</code> 粗筛候选提交，
+    <b>再</b>对每个提交做「真密钥形态」精筛（前缀 + 20 位以上连续字符）。
+    规则文本和脱敏串都不再命中，真密钥照样跑不掉。
+  </div>
+
+  <h2>今日一问：你故意弄坏哪一项来验证 Skill 不会虚报通过？</h2>
+  <div class="good">
+    <b>弄坏的是「密钥 · 工作区扫描」。</b><br>
+    选它的理由：这是<b>漏报代价最大</b>的一项 —— 别的项漏了顶多是线上难看，
+    这项漏了是凭证进公开仓库，且撤销成本极高。所以必须拿最难糊弄的一关来验证。<br><br>
+    做法：往工作区塞一个形态逼真的假密钥（<code>ghp_</code> + 26 位字符），
+    看它能不能从几千个文件里揪出来。它揪出来了，还给到了行号。<br><br>
+    而且只验证「能报红」不够 —— <b>又删掉重跑了一次，确认它能转绿</b>。
+    不会转绿的检查，跟永远绿着一样不可信。
+  </div>
+</section>
+
+<footer style="max-width:960px;margin:0 auto 30px;padding:0 34px;color:#57606a;font-size:12px;">
+  Day 25 · 2026-10-11 · 习惯打卡器 learning-journal ｜
+  Skill：<code>preflight-check.sh</code>　用法：<code>bash preflight-check.sh</code>（0=全通过 / 1=有 FAIL）
+</footer>
+
+</body>
+</html>
