@@ -29,7 +29,18 @@ PASS=0
 FAIL=0
 say_pass() { printf "  [\033[32mPASS\033[0m] %s\n" "$1"; PASS=$((PASS + 1)); }
 say_fail() { printf "  [\033[31mFAIL\033[0m] %s\n" "$1"; FAIL=$((FAIL + 1)); }
+say_note() { printf "  [\033[33mNOTE\033[0m] %s\n" "$1"; }
 ind() { sed 's/^/           /'; }
+
+# 「明示是示例」的豁免词。来历：Day 25 为了验证检查不虚报，
+# 往工作区塞过一个形态逼真的假密钥，串里写了 EXAMPLEFAKE。
+# 它形态达标但不是凭证 —— 检查却照报不误，从那以后每次跑都红两条。
+# 所以加这条豁免：**串里自己声明是示例的，不算命中**（但仍然打印出来给人看）。
+# 敢放宽的依据：真 PAT 是随机 base62，恰好撞上这些英文词的可能性可以忽略；
+# 而要用它绕过检查，得先亲手把 EXAMPLE/FAKE 写进自己要提交的串里 ——
+# 那等于明着告诉检查「这是凭证」，没有任何攻击者会这么干。
+# 豁免是可见的（NOTE 打印），不是静默放过。
+EXAMPLE_RE='EXAMPLE|FAKE|DEMO|PLACEHOLDER|SAMPLE|DUMMY|示例|假的|占位'
 
 echo "=================================================="
 echo " 发布前检查 · $(date '+%F %T')"
@@ -40,14 +51,21 @@ echo ""
 echo "① 密钥 · 工作区扫描"
 # 只认「真像密钥」的形态：前缀 + 20 位以上连续字符。
 # 写成 gh[p]_ 是为了让这条规则本身不被自己扫到（AGENTS.md R2 里那条教训）。
-hits=$(grep -rEIn \
+all_hits=$(grep -rEIn \
   "gh[p]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|(secret|password|api[_-]?key)\s*[:=]\s*['\"][A-Za-z0-9_-]{16,}['\"]" \
   --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=".edge-*" . 2>/dev/null)
+# 自己声明是示例的（串里带 EXAMPLE/FAKE/…）单独拎出来，不当 FAIL，但照样给人看
+excluded=$(echo "$all_hits" | grep -E "$EXAMPLE_RE")
+hits=$(echo "$all_hits" | grep -vE "$EXAMPLE_RE")
 if [ -z "$hits" ]; then
-  say_pass "工作区没有疑似密钥（脱敏文本不算命中）"
+  say_pass "工作区没有疑似密钥（脱敏文本与明示示例不算命中）"
 else
-  say_fail "工作区发现疑似密钥，$(echo "$hits" | wc -l | tr -d ' ') 处："
+  say_fail "工作区发现疑似密钥，$(echo "$hits" | grep -c . | tr -d ' ') 处："
   echo "$hits" | head -5 | ind
+fi
+if [ -n "$excluded" ]; then
+  say_note "另有 $(echo "$excluded" | grep -c . | tr -d ' ') 处形态像密钥但串里自述是示例，已豁免："
+  echo "$excluded" | head -3 | ind
 fi
 
 # ---------- ② 密钥 · git 历史 ----------
@@ -60,15 +78,18 @@ echo "② 密钥 · git 历史扫描"
 cands=$(git log --all --format=%H -S "ghp_" 2>/dev/null)
 real=""
 for c in $cands; do
-  if git show "$c" 2>/dev/null | grep -qE "gh[p]_[A-Za-z0-9]{20,}"; then
-    real="$real $(git log -1 --format='%h %s' "$c")"
+  # 同样的两段式：先粗筛出提交，再对每个提交做「真密钥形态」精筛，
+  # 精筛时把自述是示例的串排除（和 ① 项同一套豁免标准）。
+  if git show "$c" 2>/dev/null | grep -E "gh[p]_[A-Za-z0-9]{20,}" \
+     | grep -qvE "$EXAMPLE_RE"; then
+    real="${real}$(git log -1 --format='%h %s' "$c")"$'\n'
   fi
 done
 if [ -z "$real" ]; then
-  say_pass "全部历史分支里没有「真密钥形态」的串（规则文本与脱敏展示不算）"
+  say_pass "全部历史分支里没有「真密钥形态」的串（规则文本、脱敏展示、明示示例均不算）"
 else
   say_fail "git 历史里出现过真密钥形态的串（删文件没用，必须清历史）："
-  echo "$real" | tr ' ' '\n' | grep -v '^$' | head -5 | ind
+  printf "%b" "$real" | grep -v '^$' | head -5 | ind
 fi
 
 # ---------- ③ 敏感文件未入库 ----------

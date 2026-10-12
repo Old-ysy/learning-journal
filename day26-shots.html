@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day 26 截图页 · v1.0 发布 + 回滚演练</title>
+<style>
+  :root{
+    --ink:#1f2328; --sub:#57606a; --line:#d8dee4;
+    --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700;
+    --bg:#ffffff; --soft:#f6f8fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+    font-size:14px;line-height:1.6;}
+  .shot{max-width:960px;margin:0 auto 40px;padding:30px 34px;}
+  .shot + .shot{border-top:2px dashed var(--line);}
+  .head{display:flex;align-items:baseline;justify-content:space-between;
+    border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:16px;}
+  .head h1{font-size:19px;margin:0;letter-spacing:.5px;}
+  .head .tag{font-size:12px;color:var(--sub);}
+  h2{font-size:14px;margin:18px 0 8px;padding-left:9px;border-left:4px solid var(--ink);}
+  table{width:100%;border-collapse:collapse;margin:8px 0;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--soft);font-weight:600;font-size:13px;}
+  code{font-family:Consolas,"Courier New",monospace;font-size:12px;
+    background:var(--soft);padding:1px 4px;border-radius:3px;word-break:break-all;}
+  pre{white-space:pre-wrap;word-break:break-all;font-family:Consolas,"Courier New",monospace;
+    font-size:12px;background:var(--soft);padding:10px 12px;border-radius:6px;
+    margin:6px 0;line-height:1.55;}
+  .ok{color:var(--ok);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
+  .note{background:var(--soft);border-left:3px solid var(--sub);
+    padding:8px 12px;margin:10px 0;font-size:13px;color:var(--sub);}
+  .good{background:#dafbe1;border-left:3px solid var(--ok);padding:8px 12px;margin:10px 0;font-size:13px;}
+  .warn{background:#fff8c5;border-left:3px solid var(--warn);padding:8px 12px;margin:10px 0;font-size:13px;}
+  .console{background:#1e1e1e;border-radius:8px;padding:12px 14px;margin:10px 0;
+    font-family:Consolas,"Courier New",monospace;font-size:12px;line-height:1.75;color:#d4d4d4;}
+  .console .hdr{color:#9aa0a6;border-bottom:1px solid #333;padding-bottom:5px;margin-bottom:8px;font-size:11px;}
+  .c-p{color:#3fb950;font-weight:600}
+  .c-f{color:#f85149;font-weight:600}
+  .c-dim{color:#6e7681}
+  .c-cmd{color:#7aa2f7}
+  .c-y{color:#e3b341}
+  .urlbar{display:flex;align-items:center;gap:8px;background:var(--soft);
+    border:1px solid var(--line);border-radius:20px;padding:7px 14px;margin:10px 0;font-size:13px;}
+  .urlbar .lock{color:var(--ok)}
+  .urlbar .u{font-family:Consolas,monospace;font-size:12px;color:var(--ink);word-break:break-all;}
+  .big{font-size:26px;font-weight:700;letter-spacing:1px}
+</style>
+</head>
+<body>
+
+<!-- ===================== 图 1 ===================== -->
+<section class="shot">
+  <div class="head">
+    <h1>图 1 · v1.0 公网可访问，发布前检查 7/7 全过</h1>
+    <span class="tag">Day 26 · 2026-10-12</span>
+  </div>
+
+  <div class="urlbar">
+    <span class="lock">🔒</span>
+    <span class="u">https://the-old-d7gopkcrpbbb52f3b-1499234669.tcloudbaseapp.com/</span>
+  </div>
+
+  <h2>① 发布 v1.0（上传 2 个有变化的文件）</h2>
+  <div class="console">
+    <div class="hdr">$ git tag -a v1.0 b9bcae5 -m "v1.0：Day 26 正式发布…"</div>
+    <div class="c-cmd">$ 上传 app.js / dashboard.js 到静态托管</div>
+    <div class="c-dim">result: {"successCount": 2, "totalFiles": 2, "failedFiles": []}</div>
+    <div class="c-p">线上 app.js md5 立刻变为 af44e6973304…（与本地一致，约 2 秒内生效）</div>
+  </div>
+
+  <h2>② 发布前检查 —— 7 项全过（退出码 0）</h2>
+  <div class="console">
+    <div class="hdr">$ bash preflight-check.sh</div>
+    <div class="c-dim">① 密钥 · 工作区扫描</div>
+    <div><span class="c-p">[PASS]</span> 工作区没有疑似密钥（脱敏文本与明示示例不算命中）</div>
+    <div class="c-dim">② 密钥 · git 历史扫描</div>
+    <div><span class="c-p">[PASS]</span> 全部历史分支里没有「真密钥形态」的串</div>
+    <div class="c-dim">③ .env 未入库且被忽略</div>
+    <div><span class="c-p">[PASS]</span> .env 没入库；就算现在建一个也会被 .gitignore 挡住</div>
+    <div class="c-dim">④ 公网首页可达</div>
+    <div><span class="c-p">[PASS]</span> 首页 HTTP 200</div>
+    <div class="c-dim">⑤ 公网接口健康</div>
+    <div><span class="c-p">[PASS]</span> 接口返回 ok:true，当前 7 条习惯</div>
+    <div class="c-dim">⑥ 线上代码是最新（本地改动已经部署上去）</div>
+    <div><span class="c-p">[PASS]</span> 线上 app.js 与本地一致（md5 <span class="c-y">af44e6973304</span>…）</div>
+    <div class="c-dim">⑦ 线上资源引用完整（没有 404）</div>
+    <div><span class="c-p">[PASS]</span> 页面引用的 4 个资源全部 200</div>
+    <div class="c-dim" style="margin-top:8px">==================================================</div>
+    <div>&nbsp;结果：<span class="c-p">7 通过</span> / <span class="c-f">0 失败</span></div>
+  </div>
+
+  <div class="good">
+    <b>⑥ 项这次转绿了</b> —— Day 25 它报红说线上跑的不是本地代码
+    （线上还是 Day 20 那版，md5 <code>4ea30ae2…</code>）。今天把 v1.0 传上去，它才绿。
+    说明这条检查看的是真实状态，不是摆设。
+  </div>
+</section>
+
+<!-- ===================== 图 2 ===================== -->
+<section class="shot">
+  <div class="head">
+    <h1>图 2 · 回滚前后：提交记录 + 回退执行记录</h1>
+    <span class="tag">回退 42.137 秒</span>
+  </div>
+
+  <h2>① 可回退的历史（两个 tag 就是两条退路）</h2>
+  <div class="console">
+    <div class="hdr">$ git tag -l -n99</div>
+    <div><span class="c-y">v0.9</span>&nbsp;&nbsp;&nbsp;v0.9：Day 20 上线并在公网跑到今天的那一版（回滚演练的回退目标）</div>
+    <div><span class="c-y">v1.0</span>&nbsp;&nbsp;&nbsp;v1.0：Day 26 正式发布。含 Day 24 的数据损坏兜底与写盘失败提示</div>
+    <div class="c-dim" style="margin-top:6px">$ git log -1 --format='%h %s' v0.9</div>
+    <div><span class="c-y">e7ac14f</span> Day 20｜前端接线上云，公网首页展示数据库真实数据</div>
+    <div class="c-dim">$ git log -1 --format='%h %s' v1.0</div>
+    <div><span class="c-y">b9bcae5</span> Day 25｜产出可复用的发布前检查 Skill</div>
+  </div>
+
+  <h2>② 执行回退：v1.0 → v0.9</h2>
+  <div class="console">
+    <div class="hdr">$ bash rollback-static.sh prep v0.9</div>
+    <div class="c-dim">&nbsp;版本：e7ac14f&nbsp; Day 20｜前端接线上云，公网首页展示数据库真实数据</div>
+    <div class="c-dim">&nbsp;线上现在是什么版本（用于对比）：</div>
+    <div>&nbsp;&nbsp;&nbsp;app.js&nbsp; 线上 <span class="c-y">af44e6973304</span>…（v1.0）</div>
+    <div class="c-dim">&nbsp;取出的文件：</div>
+    <div>&nbsp;&nbsp;&nbsp;app.js&nbsp; 25288 bytes&nbsp; md5 4ea30ae218ea5607ed6bd702eb3a5562</div>
+    <div class="c-dim" style="margin-top:6px">$ 上传 5 个文件到静态托管（覆盖同名文件）</div>
+    <div class="c-dim">$ bash rollback-static.sh verify v0.9</div>
+    <div><span class="c-p">✓</span> index.html&nbsp;&nbsp;&nbsp; 线上已是目标版本&nbsp; md5 7ba4da3cbb6e…</div>
+    <div><span class="c-p">✓</span> app.js&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 线上已是目标版本&nbsp; md5 <span class="c-y">4ea30ae218ea</span>…</div>
+    <div><span class="c-p">✓</span> style.css&nbsp;&nbsp;&nbsp;&nbsp; 线上已是目标版本&nbsp; md5 c96754056637…</div>
+    <div><span class="c-p">✓</span> dashboard.js 线上已是目标版本&nbsp; md5 6666342e3bca…</div>
+    <div><span class="c-p">✓</span> mock-data.js 线上已是目标版本&nbsp; md5 75b231ff7324…</div>
+    <div class="c-dim" style="margin-top:8px">&nbsp;耗时：<span class="c-y">42.137 秒</span>（从 prep 到线上确认）</div>
+    <div><span class="c-p">&nbsp;回退完成：线上 = v0.9</span></div>
+  </div>
+
+  <h2>③ 回退中：页面照常能开，但检查能看出代码已经退回去了</h2>
+  <div class="console">
+    <div class="hdr">$ bash preflight-check.sh（线上处于 v0.9 时）</div>
+    <div><span class="c-p">[PASS]</span> ④ 首页 HTTP 200 —— <span class="c-dim">看起来一切正常</span></div>
+    <div><span class="c-p">[PASS]</span> ⑤ 接口返回 ok:true，当前 7 条习惯</div>
+    <div><span class="c-f">[FAIL]</span> ⑥ 线上跑的不是本地这份代码</div>
+    <div class="c-dim">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;本地 md5 af44e6973304… / 线上 md5 4ea30ae218ea…</div>
+    <div class="c-dim">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ 改完代码别忘了重新部署，页面能开 ≠ 代码是最新的</div>
+    <div class="c-dim" style="margin-top:6px">$ 线上 app.js 里搜 v1.0 的标志性变量 storageWritable → 命中 0 次</div>
+  </div>
+
+  <div class="warn">
+    <b>这一块是整个演练最值钱的地方</b>：回退到 v0.9 之后，页面 HTTP 200、接口正常、
+    标题正常，肉眼什么都看不出来。只有检查脚本的 ⑥ 项报红，精确指出线上 md5 和本地对不上。
+    <b>所以回滚后必须用脚本验证，不能靠肉眼。</b>
+  </div>
+</section>
+
+<!-- ===================== 图 3 ===================== -->
+<section class="shot">
+  <div class="head">
+    <h1>图 3 · 恢复 v1.0，公网页面正常</h1>
+    <span class="tag">恢复 39.748 秒 · 检查回到 7/7</span>
+  </div>
+
+  <div class="urlbar">
+    <span class="lock">🔒</span>
+    <span class="u">https://the-old-d7gopkcrpbbb52f3b-1499234669.tcloudbaseapp.com/</span>
+  </div>
+
+  <h2>① 恢复：v0.9 → v1.0</h2>
+  <div class="console">
+    <div class="hdr">$ bash rollback-static.sh prep v1.0 &amp;&amp; 上传 &amp;&amp; bash rollback-static.sh verify v1.0</div>
+    <div><span class="c-p">✓</span> index.html&nbsp;&nbsp;&nbsp; 线上已是目标版本&nbsp; md5 7ba4da3cbb6e…</div>
+    <div><span class="c-p">✓</span> app.js&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 线上已是目标版本&nbsp; md5 <span class="c-y">af44e6973304</span>…</div>
+    <div><span class="c-p">✓</span> style.css&nbsp;&nbsp;&nbsp;&nbsp; 线上已是目标版本&nbsp; md5 c96754056637…</div>
+    <div><span class="c-p">✓</span> dashboard.js 线上已是目标版本&nbsp; md5 6666342e3bca…</div>
+    <div><span class="c-p">✓</span> mock-data.js 线上已是目标版本&nbsp; md5 75b231ff7324…</div>
+    <div class="c-dim" style="margin-top:8px">&nbsp;耗时：<span class="c-y">39.748 秒</span></div>
+    <div><span class="c-p">&nbsp;回退完成：线上 = v1.0</span></div>
+  </div>
+
+  <h2>② 恢复后再跑一遍检查 —— 又是 7/7</h2>
+  <div class="console">
+    <div class="hdr">$ bash preflight-check.sh&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;退出码: 0</div>
+    <div><span class="c-p">[PASS]</span> ① 工作区没有疑似密钥</div>
+    <div><span class="c-p">[PASS]</span> ② git 历史里没有真密钥形态的串</div>
+    <div><span class="c-p">[PASS]</span> ③ .env 未入库且被忽略</div>
+    <div><span class="c-p">[PASS]</span> ④ 首页 HTTP 200</div>
+    <div><span class="c-p">[PASS]</span> ⑤ 接口返回 ok:true，当前 7 条习惯</div>
+    <div><span class="c-p">[PASS]</span> ⑥ 线上 app.js 与本地一致（md5 <span class="c-y">af44e6973304</span>…）</div>
+    <div><span class="c-p">[PASS]</span> ⑦ 页面引用的 4 个资源全部 200</div>
+    <div class="c-dim" style="margin-top:8px">&nbsp;结果：<span class="c-p">7 通过</span> / <span class="c-f">0 失败</span></div>
+  </div>
+
+  <h2>③ 耗时记录（完成标准要求的一项）</h2>
+  <table>
+    <tr><th>动作</th><th>耗时</th><th>结果</th></tr>
+    <tr><td>v1.0 → v0.9（回退）</td><td class="big">42.137 秒</td><td class="ok">5/5 文件 md5 对上</td></tr>
+    <tr><td>v0.9 → v1.0（恢复）</td><td class="big">39.748 秒</td><td class="ok">5/5 文件 md5 对上</td></tr>
+  </table>
+  <div class="note">
+    计时口径：从敲下 <code>prep</code> 那一刻，到 <code>verify</code> 确认线上已回到目标版本。
+    包含人去上传的那段时间，不含「判断该不该回滚」的思考时间。
+  </div>
+
+  <div class="warn">
+    <b>截图小提醒</b>：用浏览器第一次打开这个测试域名，CloudBase 会先弹一个「页面访问提示」，
+    点一下<b>「确定访问」</b>才会进到真正的页面（curl 不会遇到，所以之前一直没发现）。
+  </div>
+</section>
+
+<!-- ===================== 今日一问 ===================== -->
+<section class="shot">
+  <div class="head">
+    <h1>今日一问：回滚演练花了多久？真出事你敢不敢用这套流程？</h1>
+    <span class="tag">Day 26</span>
+  </div>
+
+  <h2>花了多久</h2>
+  <p><b>回退 42 秒，恢复 40 秒。</b>两步都靠 <code>rollback-static.sh</code> 这一条命令，
+  中间那次上传是唯一需要人动手的地方。</p>
+
+  <h2>敢不敢用</h2>
+  <p><b>敢，但只敢在演练过之后。</b>昨天这套流程还只是文档里的想法，今天真的退了一次又真的恢复了，
+  还量出 42 秒这个数字 —— 从这一刻起「回滚要多久」才有答案，而不是拍脑袋说「应该挺快」。</p>
+
+  <h2>演练里学到的三件事</h2>
+  <table>
+    <tr><th>#</th><th>学到什么</th><th>以后怎么做</th></tr>
+    <tr><td>1</td><td>回退后页面 <b>HTTP 200、接口正常、标题正常</b>，肉眼完全看不出代码已经退回去了</td><td>回滚完必须跑 <code>preflight-check.sh</code> 用 md5 验证，不看页面</td></tr>
+    <tr><td>2</td><td>CDN 有缓存，刚传完可能还是旧内容</td><td>验证带 <code>?nocache=时间戳</code>；回滚完提醒用户强刷</td></tr>
+    <tr><td>3</td><td>可回退的前提是<b>历史里有退路</b>：v0.9 / v1.0 两个 tag</td><td>每次发布打 tag，且<b>不删旧 tag</b> —— 旧 tag 就是下一次的退路</td></tr>
+  </table>
+
+  <h2>还不放心的地方（诚实说）</h2>
+  <div class="note">
+    今天只演练了<b>静态托管</b>。云函数回退和数据恢复只写进了 <code>ROLLBACK.md</code> 备查，
+    没有实操 —— 其中<b>数据库目前没有定期备份</b>，是最大的单点风险：
+    代码能回滚，数据回滚不了。
+  </div>
+</section>
+
+</body>
+</html>
