@@ -313,6 +313,8 @@ function buildItem(habit) {
   name.className = 'habit-name';
   name.textContent = habit.name;          // textContent 防注入
   // Day 11 余力：名字可勾选，但要给键盘用户留路——可聚焦 + 语义角色 + 键盘事件
+  // Day 27：名字的行为改回「打卡」，与它自己的 aria-label 终于一致
+  //          （Day 13 曾把名字改成进详情，aria-label 没跟着改，语义与行为打架）
   name.tabIndex = 0;
   name.setAttribute('role', 'button');
   name.setAttribute('aria-label', '切换「' + habit.name + '」的今日打卡');
@@ -321,6 +323,10 @@ function buildItem(habit) {
   streakEl.className = 'habit-streak' + (streak > 0 ? ' is-active' : '');
   // streak 为 0 时不挂火苗（"🔥 0 天"像嘲讽），显示中性文案
   streakEl.textContent = streak > 0 ? '🔥 ' + streak + ' 天' : '还没开始';
+  // Day 27：详情入口挪到天数上——想看细节就点天数，符合直觉
+  streakEl.tabIndex = 0;
+  streakEl.setAttribute('role', 'link');
+  streakEl.setAttribute('aria-label', '查看「' + habit.name + '」的详情');
 
   var del = document.createElement('button');
   del.type = 'button';
@@ -580,38 +586,31 @@ tabsEl.addEventListener('click', function (event) {
 // 浏览器前进/后退
 window.addEventListener('popstate', applyRoute);
 
-// 习惯名字点击 → 进详情（只对 list/stats 的 name 起作用）
+/**
+ * Day 27：把「进详情」抽出来共用。
+ * 入口从习惯名改成了天数（.habit-streak）——名字归打卡。
+ */
+function openDetailFrom(el) {
+  var li = el.closest('.habit-item');
+  if (!li) return;
+  var params = new URLSearchParams(window.location.search);
+  params.set('view', 'detail');
+  params.set('habit', li.dataset.id);
+  hasInAppHistory = true;
+  history.pushState(null, '', window.location.pathname + '?' + params.toString());
+  applyRoute();
+}
+
+// 天数点击 → 进详情（只对 list/stats 的 streak 起作用）
 listEl.addEventListener('click', function (event) {
-  var target = event.target;
-  // 名字列已经走 detail 路径
-  if (target.classList && target.classList.contains('habit-name')) {
-    var li = target.closest('.habit-item');
-    if (!li) return;
-    var id = li.dataset.id;
-    var params = new URLSearchParams(window.location.search);
-    params.set('view', 'detail');
-    params.set('habit', id);
-    var qs = params.toString();
-    hasInAppHistory = true;
-    history.pushState(null, '', window.location.pathname + '?' + qs);
-    applyRoute();
-    return;
+  if (event.target.classList && event.target.classList.contains('habit-streak')) {
+    openDetailFrom(event.target);
   }
 });
 
 statsListEl.addEventListener('click', function (event) {
-  var target = event.target;
-  if (target.classList && target.classList.contains('habit-name')) {
-    var li = target.closest('.habit-item');
-    if (!li) return;
-    var id = li.dataset.id;
-    var params = new URLSearchParams(window.location.search);
-    params.set('view', 'detail');
-    params.set('habit', id);
-    var qs = params.toString();
-    hasInAppHistory = true;
-    history.pushState(null, '', window.location.pathname + '?' + qs);
-    applyRoute();
+  if (event.target.classList && event.target.classList.contains('habit-streak')) {
+    openDetailFrom(event.target);
   }
 });
 
@@ -665,6 +664,9 @@ listEl.addEventListener('click', function (event) {
 
   if (target.classList.contains('habit-check')) {
     handleToggle(id);                                   // F2 + Day 11 反馈
+  } else if (target.classList.contains('habit-name')) {
+    // Day 27：真实用户第一反应是点名字，点它就得打上卡（此前会跳详情，且详情页里打不了卡）
+    handleToggle(id);
   } else if (target.classList.contains('habit-delete')) {
     var ok = window.confirm('确定删除这个习惯吗？删除后记录不保留。');   // F4
     if (ok) deleteHabit(id);
@@ -672,21 +674,21 @@ listEl.addEventListener('click', function (event) {
 });
 
 // Day 11 余力：键盘也能操作——Enter / Space 触发名字勾选
+// Day 27：名字 = 打卡（与 aria-label 一致），天数 = 进详情
 listEl.addEventListener('keydown', function (event) {
   if (event.key !== 'Enter' && event.key !== ' ') return;
   var target = event.target;
-  if (!target.classList || !target.classList.contains('habit-name')) return;
+  if (!target.classList) return;
   event.preventDefault();                                // 阻止空格滚动页面
-  // 名字当前优先于 toggle——键盘直接进详情更符合预期
-  var li = target.closest('.habit-item');
-  if (!li) return;
-  var id = li.dataset.id;
-  var params = new URLSearchParams(window.location.search);
-  params.set('view', 'detail');
-  params.set('habit', id);
-  hasInAppHistory = true;
-  history.pushState(null, '', window.location.pathname + '?' + params.toString());
-  applyRoute();
+
+  if (target.classList.contains('habit-name')) {
+    var li = target.closest('.habit-item');
+    if (li) handleToggle(li.dataset.id);
+    return;
+  }
+  if (target.classList.contains('habit-streak')) {
+    openDetailFrom(target);
+  }
 });
 
 // Day 12：筛选输入即筛。用 input 事件不用 change（change 要失焦才触发，SKILL.md 规则 3）

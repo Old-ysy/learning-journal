@@ -293,6 +293,10 @@ body {
   background: var(--bg);
   border-radius: 999px;
   white-space: nowrap;
+  /* Day 27：天数现在是「看详情」的入口——给它可点的样子 */
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 
 .habit-streak.is-active {
@@ -415,6 +419,7 @@ body {
 .add-btn:focus-visible,
 .habit-check:focus-visible,
 .habit-name:focus-visible,
+.habit-streak:focus-visible,
 .habit-delete:focus-visible,
 .filter-input:focus-visible,
 .state-select:focus-visible,

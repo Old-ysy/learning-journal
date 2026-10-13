@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Day 27 · 第三方试用 + 资源额度检查</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e4e7eb; --text:#1f2328; --muted:#6b7280;
+    --accent:#2563eb; --ok:#16a34a; --bad:#dc2626; --warn:#d97706;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px 16px;background:var(--bg);color:var(--text);
+       font:14px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:21px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+  h2{font-size:16px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px}
+  .shot-tag{display:inline-block;background:#0f172a;color:#93c5fd;font:12px/1 ui-monospace,monospace;
+            padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:#f8fafc;font-weight:600;white-space:nowrap}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ok{color:var(--ok);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
+  .warn{color:var(--warn);font-weight:600}
+  .muted{color:var(--muted)}
+  .url{font:12.5px/1.6 ui-monospace,Consolas,monospace;word-break:break-all;
+       background:#0f172a;color:#e2e8f0;padding:10px 12px;border-radius:7px;margin:8px 0}
+  ul{margin:6px 0 0;padding-left:20px}
+  li{margin:3px 0}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13.5px}
+  .kv b{font-weight:600;white-space:nowrap}
+  .before{background:#fef2f2;border-left:3px solid var(--bad);padding:8px 12px;border-radius:0 6px 6px 0;margin:6px 0}
+  .after{background:#f0fdf4;border-left:3px solid var(--ok);padding:8px 12px;border-radius:0 6px 6px 0;margin:6px 0}
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:11px 14px;font-size:13px;color:#78350f;margin-top:10px}
+  code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12.5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:700px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Day 27 · 真实用户卡在哪 + 资源额度检查</h1>
+  <div class="sub">learning-journal · 2026-10-13 · 共两张截图，对应下面两块</div>
+
+  <!-- ================= 图 1 ================= -->
+  <div class="card">
+    <span class="shot-tag">图 1 · 第三方试用的记录</span>
+    <h2>试用方式</h2>
+    <div class="url">https://the-old-d7gopkcrpbbb52f3b-1499234669.tcloudbaseapp.com/</div>
+    <table>
+      <tr><th>步骤</th><th>做了什么</th><th>结果</th></tr>
+      <tr><td>① 邀请第三方试用</td><td>产出《第三方试用任务卡》（5 步核心流程 + 每步「顺利/有点懵/卡住了」+ 三栏反馈），可发给任何没参与过项目的人</td><td class="warn">待真人执行<br><span class="muted">见下方说明</span></td></tr>
+      <tr><td>② 收集反馈</td><td>先自己按「卡住降级」方案执行：清空浏览器数据、不看代码、只照任务卡走一遍</td><td class="ok">完成，抓到 5 个卡点</td></tr>
+      <tr><td>③ 最高优先级修复</td><td>修「点习惯名不打卡」——核心流程第 2 步</td><td class="ok">已修复并上线</td></tr>
+    </table>
+
+    <h2 style="margin-top:18px">冷启动走查：抓到的卡点</h2>
+    <table>
+      <tr><th>#</th><th>我做了什么</th><th>我以为会怎样</th><th>实际发生</th></tr>
+      <tr>
+        <td>1</td>
+        <td>点习惯名「读 20 页书」</td>
+        <td>打上今天的卡</td>
+        <td class="bad">跳进了「习惯详情」页<br><span class="muted">而详情页里根本没有打卡按钮，只能点「← 返回」退回去</span></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>读页面底部那行小字</td>
+        <td>—</td>
+        <td class="bad">写着「Day 20 范围：只读接线，打卡 / 删除暂未写入云端」<br><span class="muted">内部术语；真实用户会以为打卡没用</span></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>切到「统计」看完成情况</td>
+        <td>看到完成率 / 连续天数</td>
+        <td class="warn">看到的是和列表一模一样的清单</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>在统计页点方框</td>
+        <td>打上卡</td>
+        <td class="warn">没反应（统计页没接打卡事件）</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>用读屏软件听习惯名</td>
+        <td>听到「切换今日打卡」</td>
+        <td class="warn">标签这么念，点了却进详情 —— 语义和行为打架</td>
+      </tr>
+    </table>
+
+    <div class="note">
+      <b>关于「真人」这一步：</b>任务卡已经做好（<code>day27-trial-card.html</code>），
+      需要发给一个没参与过项目的同学/家人，让他照着做 5 步并把反馈发回来。
+      这一步得由本人发消息完成，AI 代不了 —— 今天先按打卡任务给的「卡住降级」方案执行：
+      自己隔一段时间后清空数据、不看代码重走一遍，把第一个不理解的地方记下来（就是上面第 1 条）。
+    </div>
+  </div>
+
+  <!-- ================= 修复 ================= -->
+  <div class="card">
+    <h2>最高优先级修复：点习惯名必须能打上卡</h2>
+    <div class="before"><b>改前：</b>点名字 → <code>history.pushState(?view=detail)</code> → 进详情页，打不了卡</div>
+    <div class="after"><b>改后：</b>点名字 → <code>handleToggle(id)</code> → 立刻打上卡、徽章变 🔥 1 天，人还留在列表</div>
+    <p style="margin:10px 0 0">那「看详情」去哪了 —— 挪到了<b>天数</b>上（「🔥 3 天」/「还没开始」，加了虚线下划线表示可点）：</p>
+    <ul>
+      <li>名字 → 打卡（和它自己的 <code>aria-label</code> 终于一致了）</li>
+      <li>天数 → 看详情（想看细节就点天数，Day 13 的详情视图没丢）</li>
+      <li>键盘 Enter / 空格同样：名字打卡、天数进详情</li>
+    </ul>
+    <div class="note">
+      <b>为什么敢动 Day 13 的契约：</b>Day 11 写 <code>aria-label="切换「X」的今日打卡"</code>，
+      Day 13 把行为改成进详情时<b>忘了改标签</b> —— 是漏改的 bug，不是有意的设计。
+      18 条回归测试失败后，只把测试里的入口从 <code>.habit-name</code> 换成 <code>.habit-streak</code>，
+      测试意图（点详情入口 → 进 detail）一点没变。<b>重跑 322 项全绿</b>。
+    </div>
+  </div>
+
+  <!-- ================= 图 2 ================= -->
+  <div class="card">
+    <span class="shot-tag">图 2 · 资源检查结果</span>
+    <h2>环境额度与到期</h2>
+    <div class="grid2">
+      <div>
+        <table>
+          <tr><th>项目</th><th>值</th></tr>
+          <tr><td>环境 ID</td><td class="muted">the-old-d7gopkcrpbbb52f3b</td></tr>
+          <tr><td>套餐</td><td>体验版（baas_trial）</td></tr>
+          <tr><td>到期日期</td><td class="ok">2027-04-01 23:59:59</td></tr>
+          <tr><td>状态</td><td class="ok">NORMAL</td></tr>
+          <tr><td>地域</td><td>ap-shanghai</td></tr>
+          <tr><td>QPS 配额</td><td class="num">500</td></tr>
+          <tr><td>数据库</td><td>CloudBase PG · postgres-l4hxxh54</td></tr>
+          <tr><td>自动续费</td><td class="warn">未开通</td></tr>
+        </table>
+      </div>
+      <div>
+        <table>
+          <tr><th>本周期用量（资源点）</th><th class="num">点</th><th class="num">次数</th></tr>
+          <tr><td>网关 · 安全调用</td><td class="num">2.34</td><td class="num">234</td></tr>
+          <tr><td>云函数 SCF</td><td class="num">1.72</td><td class="num">139</td></tr>
+          <tr><td>网关 · 标准调用</td><td class="num">0.32</td><td class="num">107</td></tr>
+          <tr><td>对象存储 COS</td><td class="num">0.01</td><td class="num">5</td></tr>
+          <tr><td>静态托管 HOSTING</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>数据库 / 其他</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><th>合计</th><th class="num">≈ 4.39</th><th></th></tr>
+        </table>
+        <p class="muted" style="font-size:12.5px;margin:8px 0 0">
+          计费周期 2026-10-01 16:48:22 → 2026-11-01 23:59:59<br>
+          云函数另计 7 GBs 内存、565 KB 出流量
+        </p>
+      </div>
+    </div>
+    <div class="note">
+      <b>结论：</b>用量极低（4.39 点），离体验版额度还差得远，<b>没有超额风险</b>。
+      唯一要盯的是<b>到期日 2027-04-01</b> 且<b>没开自动续费</b> —— 到期后环境会停服，
+      得在日历上记一笔，别让它悄悄过期。
+    </div>
+  </div>
+
+  <!-- ================= 发布 ================= -->
+  <div class="card">
+    <h2>发布与验证</h2>
+    <div class="kv">
+      <b>已部署</b><span>index.html / app.js / style.css → 静态托管</span>
+      <b>发布检查</b><span class="ok">preflight 7 通过 / 0 失败</span>
+      <b>回归测试</b><span class="ok">322 项全绿（含 Day 10~23 + app + mock）</span>
+      <b>线上确认</b><span>app.js 含修复代码，footer 文案已换成「点名字打卡 · 点天数看详情」</span>
+    </div>
+  </div>
+
+  <!-- ================= 余力加练 ================= -->
+  <div class="card">
+    <h2>余力加练：手机宽度完成一次完整打卡</h2>
+    <table>
+      <tr><th>步骤</th><th>结果</th></tr>
+      <tr><td>375×667 视口 / iPhone 13 档位</td><td class="warn">工具没生效（实测 innerWidth 仍是 1258）</td></tr>
+      <tr><td>添加习惯「每天喝水 8 杯」</td><td class="ok">成功</td></tr>
+      <tr><td>点名字打卡</td><td class="ok">checked=true，徽章 🔥 1 天</td></tr>
+    </table>
+    <div class="note">
+      视口切换在这个环境里压不下去，所以<b>手机端的布局问题没能真正验证</b>（只能确认
+      <code>style.css</code> 里有 <code>@media (max-width: 420px)</code> 断点，375 会命中）。
+      真机验证留给真人试用那一步：让他<b>用手机打开</b>，正好一举两得。
+    </div>
+  </div>
+
+  <!-- ================= 今日一问 ================= -->
+  <div class="card">
+    <h2>今日一问：真实用户卡在哪个你从没想过的地方？</h2>
+    <p style="margin:0">
+      <b>卡在「点习惯名」上 —— 而我一直以为那里没问题。</b><br><br>
+      我自己做过这个功能、写过它的 <code>aria-label</code>（「切换今日打卡」），
+      脑子里的模型一直是「点名字 = 打卡」。直到清空数据当陌生人重走一遍，
+      才发现 Day 13 把行为改成了进详情，<b>标签没跟着改</b>。
+      于是出现了一个特别阴的情况：<b>代码自己宣称的行为，和它实际的行为，是两回事</b> ——
+      自动化测试测的是实际行为，全绿；读屏用户听到的是宣称行为，全是错的。<br><br>
+      更没想到的是连带效果：详情页里<b>没有打卡按钮</b>。
+      所以用户不但是"点错了"，而且是被带到一个<b>没法完成他刚才想做的事</b>的页面，
+      还得自己找到「← 返回」退回来。<br><br>
+      <b>教训：</b>「我能用」不等于「别人能用」。我对这个页面的熟悉，恰恰让我看不见它最基础的用法问题。
+      要找这种问题只有一个办法 —— <b>清空数据，假装不认识它，从第一步开始点</b>。
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
