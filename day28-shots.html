@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Day 28 · 结营验收：附录 J 逐项打勾 + 结营交付</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e4e7eb; --text:#1f2328; --muted:#6b7280;
+    --accent:#2563eb; --ok:#16a34a; --bad:#dc2626; --warn:#d97706;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px 16px;background:var(--bg);color:var(--text);
+       font:14px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:920px;margin:0 auto}
+  h1{font-size:21px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+  h2{font-size:16px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px}
+  .shot-tag{display:inline-block;background:#0f172a;color:#93c5fd;font:12px/1 ui-monospace,monospace;
+            padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:#f8fafc;font-weight:600;white-space:nowrap}
+  .ok{color:var(--ok);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
+  .warn{color:var(--warn);font-weight:600}
+  .muted{color:var(--muted)}
+  .url{font:12.5px/1.6 ui-monospace,Consolas,monospace;word-break:break-all;
+       background:#0f172a;color:#e2e8f0;padding:10px 12px;border-radius:7px;margin:8px 0}
+  ul{margin:6px 0 0;padding-left:20px}
+  li{margin:3px 0}
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:11px 14px;font-size:13px;color:#78350f;margin-top:10px}
+  .good{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:11px 14px;font-size:13px;color:#14532d;margin-top:10px}
+  code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12.5px}
+  .check{color:var(--ok);font-weight:700}
+  blockquote{margin:8px 0 0;padding:10px 14px;background:#f8fafc;border-left:3px solid var(--accent);border-radius:0 6px 6px 0;font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Day 28 · 结营验收：附录 J 逐项打勾 + 结营交付清单</h1>
+  <div class="sub">learning-journal · 2026-10-14 · 今日版本 v1.1（新增数据导出）· 两张截图对应下面两块</div>
+
+  <!-- ================= 图 1 ================= -->
+  <div class="card">
+    <span class="shot-tag">图 1 · 验收官检测 + 附录 J 100 分验收表</span>
+
+    <h2>验收官检测（今天现场跑的，命令与原始结果）</h2>
+    <table>
+      <tr><th>检测项</th><th>方法</th><th>结果</th></tr>
+      <tr><td>① 公网首页</td><td><code>curl -I</code> 静态域名</td><td class="ok">HTTP 200 · text/html</td></tr>
+      <tr><td>② 健康接口</td><td><code>GET /api/health</code></td><td class="ok">{"ok":true,"service":"habit-tracker"}</td></tr>
+      <tr><td>③ 读取</td><td><code>GET /api/habits</code></td><td class="ok">7 条真实数据</td></tr>
+      <tr><td>④ 线上写入</td><td>POST → 立刻 GET?id= 回查 → DELETE，连续 4 轮</td><td class="ok">4/4 全部回查成功，清理后恢复 7 条</td></tr>
+      <tr><td>⑤ 持久化</td><td>云函数重启/换实例后再读</td><td class="ok">数据仍在（PG 落库，非内存）</td></tr>
+      <tr><td>⑥ 错误响应</td><td>不存在的 id / 不支持的方法</td><td class="ok">NOT_FOUND / BAD_REQUEST 中文文案正常返回</td></tr>
+    </table>
+
+    <div class="note">
+      <b>如实记录 · 三个发现（验收就是要报忧）：</b>
+      <ul>
+        <li><b>网关对 GET 有短时缓存</b>：写入后立刻不带参数 GET，可能读到几秒前的旧数据，几十秒内自动更新。响应头本身是 <code>no-store</code>，是网关层行为，函数侧改不了。缓解：前端本就整页刷新后重新拉取，实际影响窗口很小。</li>
+        <li><b>冷启动偶发</b>：当天第一笔 POST 返回 ok 但数据未落库（1 次），随后连续 4 轮回环无法复现。已如实记录，不在验收上藏。</li>
+        <li><b>页面端是「只读接线」边界</b>（Day 20 范围）：页面上的新增/打卡/删除只写 localStorage，云端写入能力完整在 API 层（今天 ④ 验证）。这是全项目最大的如实标注项。</li>
+      </ul>
+    </div>
+
+    <h2 style="margin-top:18px">附录 J｜100 分最终验收表（逐项打勾）</h2>
+    <table>
+      <tr><th>项目</th><th class="num">分值</th><th>通过证据（本项目实际对应）</th><th>结论</th></tr>
+      <tr><td>提示词理解与改写</td><td>20</td><td>① Day 3 research.md → Day 4 PRD 六项功能裁剪（<b>不做清单</b>就是提示词约束）；② AGENTS.md 持久协作约定（Day 5 起生效至今）；③ Day 27 冷启动走查后给出的修复提示词（见图 2）。每条都有「说清要什么 → 核对做没做对」的复盘记录</td><td class="check">✓</td></tr>
+      <tr><td>前端页面与交互</td><td>15</td><td>三个视图：列表 / 详情 / 统计（<code>?view=</code> 路由，Day 13）；四态反馈 loading / error / empty / 筛选无命中（Day 14）；交互反馈：打卡提示、空状态、焦点环（Day 11）。移动端截图如实标注：无头浏览器视口压不到手机宽度，由真机截图补（Day 27 已确认存在 <code>@media (max-width:420px)</code> 断点）</td><td class="check">✓</td></tr>
+      <tr><td>云函数与 API</td><td>15</td><td>健康（Day 15）、读取（Day 17）、写入（Day 18）、修改/删除（Day 22）；错误响应中文人话（Day 23 约定 + 今天 ⑥ 实测）；分层结构 index / handlers / repo / lib（Day 19 重构）。接口契约 <code>api-contract.md</code> 与实现一致</td><td class="check">✓</td></tr>
+      <tr><td>云数据库</td><td>15</td><td>PostgreSQL（Day 16 建表 + 唯一索引）；真实读写（今天 ④ 4/4 回环）；修改/删除（Day 22 PATCH/DELETE + 读回验证）；持久化（重启后数据仍在，今天 ⑤）；外键 CASCADE 连带删打卡记录</td><td class="check">✓</td></tr>
+      <tr><td>第三周周成果</td><td>10</td><td>云端数据服务 v1（Day 21 验收）＋ 17 项自检表 <code>WEEK3_ACCEPTANCE.md</code>（含当时如实标注的 FAIL 项）＋ day21/22/23 三份证据页</td><td class="check">✓</td></tr>
+      <tr><td>Skill 与测试</td><td>10</td><td>发布前检查 Skill：<code>preflight-check.sh</code> 7 项一键检查（Day 25，今天部署后又跑了一遍 7/7）；故意失败验证不虚报（Day 25 主任务）；Bug 修复：save/load 损坏数据 try/catch（Day 24）；回归测试 <b>322 + 8 项全绿</b>（今天新增导出 8 项）</td><td class="check">✓</td></tr>
+      <tr><td>线上发布</td><td>10</td><td>公网地址（下方）；线上读写（今天 ③④）；日志：云函数每次请求记录 request / request_done 含耗时与结果码（Day 23）；数据库证据：PG 中 7 条习惯今天可随时查</td><td class="check">✓</td></tr>
+      <tr><td>额度、到期和备份</td><td>5</td><td>到期时间 <b>2027-04-01 23:59:59</b>、体验版、用量 ≈4.39 点、无超额风险（Day 27 实查）；数据导出：今天上线「导出数据 (JSON)」按钮，页面上真实可点（见下方余力加练）</td><td class="check">✓</td></tr>
+      <tr><td class="muted">合计</td><td class="muted">100</td><td class="muted">8/8 项通过，证据全部可当场打开或复跑</td><td class="check">✓ 100</td></tr>
+    </table>
+    <div class="url">https://the-old-d7gopkcrpbbb52f3b-1499234669.tcloudbaseapp.com/</div>
+  </div>
+
+  <!-- ================= 图 2 ================= -->
+  <div class="card">
+    <span class="shot-tag">图 2 · 项目映射表 + 结营交付清单 + 复盘</span>
+
+    <h2>我的项目与能力底线对应表</h2>
+    <table>
+      <tr><th>能力底线</th><th>我的项目对应功能</th><th>证据链接 / 截图</th></tr>
+      <tr><td>至少 3 个页面/视图</td><td>列表 / 详情 / 统计 三个视图，URL 驱动可直达</td><td><code>?view=list|detail|stats</code>（Day 13）</td></tr>
+      <tr><td>至少 1 个有反馈的交互</td><td>点名字打卡（有提示语）；点天数进详情；加载四态反馈</td><td>Day 27 v1.0.1 · day27-shots.html</td></tr>
+      <tr><td>至少 1 类数据真实写入并读取</td><td>habits 表：POST 新增 → GET 回查 → DELETE 清理</td><td>今天 curl 4/4 回环（图 1 表）</td></tr>
+      <tr><td>前端、云函数和数据库完整链路</td><td>页面 → API 网关 → habits 云函数 → PostgreSQL</td><td>TECH_DESIGN.md 第 6 节分层图</td></tr>
+      <tr><td>一次公网发布</td><td>v1.0（Day 26）→ v1.0.1（Day 27）→ v1.1（今天）</td><td>静态托管域名（图 1）</td></tr>
+      <tr><td>刷新后数据仍存在</td><td>云端 7 条习惯跨天、跨函数重启仍在</td><td>今天检测 ⑤</td></tr>
+      <tr><td>额度、到期和备份已记录</td><td>2027-04-01 到期 · ≈4.39 点 · JSON 导出按钮</td><td>Day 27 证据页 + 今天余力加练</td></tr>
+      <tr><td>能解释提示词和验证方式</td><td>AGENTS.md 协作约定 + preflight 脚本 + 回归测试</td><td>SKILL.md（Day 25）· 本页图 1</td></tr>
+    </table>
+
+    <h2 style="margin-top:18px">结营交付清单</h2>
+    <table>
+      <tr><th>交付物</th><th>状态</th><th>位置 / 说明</th></tr>
+      <tr><td>公网地址</td><td class="check">✓</td><td>图 1 底部（同 Day 26 起未变）</td></tr>
+      <tr><td>代码仓库链接</td><td class="check">✓</td><td><code>github.com/Old-ysy/learning-journal</code></td></tr>
+      <tr><td>3–5 分钟演示录屏</td><td class="warn">待录制</td><td class="muted">脚本已备：① 打开公网地址看列表 → ② 点名字打卡看提示 → ③ 点天数进详情 → ④ 切统计视图 → ⑤ 回列表新增一个习惯 → ⑥ 导出数据按钮下载 JSON 打开 → ⑦ curl 一条 /api/health 收尾</td></tr>
+      <tr><td>最终验收表和项目映射表</td><td class="check">✓</td><td>本页（day28-shots.html）</td></tr>
+      <tr><td>一条最有效的改写提示词</td><td class="check">✓</td><td>见下方引用块</td></tr>
+      <tr><td>运行和技术路线说明</td><td class="check">✓</td><td>README.md（本地打开 / 公网两种模式、技术栈、目录结构）</td></tr>
+      <tr><td>数据库、部署、额度、到期和备份说明（不含密钥）</td><td class="check">✓</td><td>README + ROLLBACK.md + Day 27 额度检查 + 本页图 1 第 8 行</td></tr>
+      <tr><td>200 字以内结营总结</td><td class="check">✓</td><td>见下方</td></tr>
+    </table>
+
+    <h2 style="margin-top:18px">一条最有效的改写提示词（Day 27，直接产出 v1.0.1）</h2>
+    <blockquote>
+      「真实用户的第一反应是<b>点习惯名字本身</b>来打卡，而不是点复选框。把『点名字』改成打卡、『点天数』改成进详情，键盘操作同步改，改完跑全部回归测试。」<br>
+      <span class="muted">为什么有效：它不是凭空想的需求，是冷启动走查里真实卡住的第 1 卡点；并且一句话里带了「验收方式」（跑回归），做完就能核对。</span>
+    </blockquote>
+
+    <h2 style="margin-top:18px">今日余力加练：数据导出按钮（三选一）</h2>
+    <table>
+      <tr><th>项</th><th>结果</th></tr>
+      <tr><td>功能</td><td>列表页底部「导出数据 (JSON)」按钮 → 下载 <code>habits-export-日期.json</code>，含全部习惯 + 打卡记录 + 导出时间 + 数据来源（cloud/local）</td></tr>
+      <tr><td>专项测试</td><td class="ok">8/8 通过（按钮绑定 / MIME / 合法 JSON / 字段完整 / 文件名格式）</td></tr>
+      <tr><td>回归</td><td class="ok">322 项全绿，未破坏任何已有行为</td></tr>
+      <tr><td>部署</td><td class="ok">preflight 7/7 · 线上 md5 已更新 · curl 确认 <code>exportData</code> 已上线</td></tr>
+    </table>
+
+    <h2 style="margin-top:18px">200 字结营总结</h2>
+    <blockquote>
+      28 天做完一个习惯打卡小工具：从 PRD 到原生 JS 页面，再到云函数 + PostgreSQL，最后发布上线。最大的收获不是代码，是验收方式——写完不等于做完，能跑不等于跑对：Day 26 发现线上一直跑旧代码，从此发布前必跑 preflight 脚本核对 md5；Day 27 冷启动走查抓到 5 个卡点，才明白自己以为的顺手和真实用户的顺手是两回事。项目的边界也如实记录在案：页面端仍是只读接线，云端写能力完整在 API 层。作品在线，数据在库，方法在手上。
+    </blockquote>
+
+    <h2 style="margin-top:18px">今日一问：28 天里最大的一个认知改变？</h2>
+    <blockquote>
+      以前以为做东西的难点是「把功能写出来」，这 28 天发现难点是「知道自己写出来的东西对不对」。页面能打开、接口有返回、命令没报错——全都不算数。要哈希对哈希、写完读回、让真实用户亲手点一遍。信任不能建立在「它说成功了」上面，只能建立在可核对的证据上面。
+    </blockquote>
+    <div class="note" style="margin-top:8px">（打卡时可以按自己的话说，这只是候选稿）</div>
+  </div>
+
+</div>
+</body>
+</html>

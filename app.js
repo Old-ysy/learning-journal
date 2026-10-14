@@ -64,6 +64,9 @@ var errorRetryEl = document.getElementById('error-retry');
 var statsListEl = document.getElementById('stats-list');
 var statsEmptyEl = document.getElementById('stats-empty');
 
+// Day 28 余力加练：数据导出按钮（测试夹具没有这个节点，用判空保护）
+var exportBtnEl = document.getElementById('export-btn');
+
 // 当前视图与列表状态（仅内存，不持久化——刷新就回到默认）
 var currentView = 'list';      // list | detail | stats
 var listState = 'normal';      // normal | loading | empty | error
@@ -642,6 +645,36 @@ errorRetryEl.addEventListener('click', function () {
   }
   bootstrap();
 });
+
+/* ---------- Day 28 余力加练：数据导出 ----------
+ * 验收表「额度、到期和备份」要求能给出数据导出说明；
+ * 与其只写文档，不如给用户一个真的能点的按钮。
+ * 导出的就是当前内存里的 state（公网=云端数据，本地=localStorage 数据），
+ * JSON 保存到本地文件，打卡记录一条不丢。
+ */
+function exportData() {
+  var payload = {
+    app: 'habit-tracker',
+    exportedAt: new Date().toISOString(),
+    source: USE_CLOUD ? 'cloud' : 'local',
+    total: state.habits.length,
+    habits: state.habits,
+  };
+  var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'habits-export-' + todayStr() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showHint('已导出 ' + state.habits.length + ' 个习惯的备份文件');
+}
+
+if (exportBtnEl) {
+  exportBtnEl.addEventListener('click', exportData);
+}
 
 formEl.addEventListener('submit', function (event) {
   event.preventDefault();

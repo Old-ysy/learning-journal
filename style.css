@@ -134,6 +134,19 @@
 .meta-row a { color: var(--accent); text-decoration: none; }
 .meta-row a:hover { text-decoration: underline; }
 
+/* Day 28 余力加练：数据导出按钮 —— 低调的次要操作，不打扰主流程 */
+.export-btn {
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+.export-btn:hover { background: var(--accent); color: #fff; }
+.export-hint { color: var(--muted, #888); font-size: 0.85em; align-self: center; }
+
 * {
   box-sizing: border-box;
 }
