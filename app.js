@@ -12,6 +12,10 @@
 var STORAGE_KEY = 'habits';
 var MAX_HABITS = 12;          // PRD F1：上限 12 个
 var MAX_NAME_LEN = 20;        // PRD F1：1-20 字符
+
+// Day 29：待办独立存储（TECH_DESIGN.md 3.2 节）——不塞进 habits，互不污染
+var TODO_KEY = 'todos';
+var MAX_TODO_TEXT = 50;       // 待办是一句话，比习惯名（20）宽
 var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 
 /* ---------- Day 20：数据源 -------------
@@ -35,6 +39,7 @@ var API_HABITS =
 
 var state = {
   habits: [],   // [{ id, name, createdAt, records: ['YYYY-MM-DD', ...] }]
+  todos: [],    // Day 29：[{ id, text, dueDate, done, createdAt, completedAt }]
   filter: ''    // 筛选只作用于显示，不持久化（SKILL.md 规则 1）
 };
 
@@ -66,6 +71,19 @@ var statsEmptyEl = document.getElementById('stats-empty');
 
 // Day 28 余力加练：数据导出按钮（测试夹具没有这个节点，用判空保护）
 var exportBtnEl = document.getElementById('export-btn');
+
+// Day 29：待办相关节点。测试夹具的 getElementById 总是返回一个空元素，
+// 所以这里再加一层判空是为了防真浏览器里节点被删/改名的极端情况。
+var todoFormEl = document.getElementById('todo-form');
+var todoInputEl = document.getElementById('todo-input');
+var todoDateEl = document.getElementById('todo-date');
+var todoListEl = document.getElementById('todo-list');
+var todoEmptyEl = document.getElementById('todo-empty');
+var todoAlertEl = document.getElementById('todo-alert');
+var todoSummaryEl = document.getElementById('todo-summary');
+var todoStatsEl = document.getElementById('todo-stats');
+var todoStatsListEl = document.getElementById('todo-stats-list');
+var todoAlertTimer = null;
 
 // 当前视图与列表状态（仅内存，不持久化——刷新就回到默认）
 var currentView = 'list';      // list | detail | stats
@@ -282,6 +300,270 @@ function deleteHabit(id) {
   if (!storageWritable) showHint('已删除，但没能保存到本地（刷新会恢复）');
 }
 
+/* ---------- Day 29：今日待办 ---------- */
+
+/**
+ * 读待办。失败只在控制台报，不向上抛 ——
+ * 待办是附加数据源，坏了不能让习惯列表跟着进 error 状态。
+ */
+function loadTodos() {
+  try {
+    var raw = localStorage.getItem(TODO_KEY);
+    if (!raw) return;
+    var parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.todos)) {
+      state.todos = parsed.todos;
+    }
+  } catch (err) {
+    console.error('读取待办失败，已忽略：', err);
+  }
+}
+
+function saveTodos() {
+  try {
+    localStorage.setItem(TODO_KEY, JSON.stringify({ todos: state.todos }));
+    return true;
+  } catch (err) {
+    console.error('写入待办失败：', err);
+    return false;
+  }
+}
+
+/**
+ * 新增待办。
+ * dueDate 必填、默认今天（TECH_DESIGN.md 3.2）：默认今天让「逾期」自然产生 ——
+ * 昨天没做完的，今天打开就是逾期，不然逾期标红永远没机会出现。
+ */
+function addTodo(text, dueDate) {
+  var trimmed = String(text == null ? '' : text).trim();
+  if (trimmed === '') return { ok: false };
+
+  var due = dueDate || todayStr();
+  state.todos.unshift({
+    id: 't_' + Date.now() + Math.random().toString(36).slice(2, 6),
+    text: trimmed.slice(0, MAX_TODO_TEXT),
+    dueDate: due,
+    done: false,
+    createdAt: todayStr(),
+    completedAt: null
+  });
+
+  saveTodos();
+  renderTodos();
+  return { ok: true };
+}
+
+/**
+ * 勾选 / 取消。
+ * completedAt 记完成当天：需求第 4 条「哪天清了几项」全靠它按日期推导，
+ * 不再单独维护一份完成日志。
+ */
+function toggleTodo(id) {
+  var today = todayStr();
+  for (var i = 0; i < state.todos.length; i++) {
+    var t = state.todos[i];
+    if (t.id !== id) continue;
+    t.done = !t.done;
+    t.completedAt = t.done ? today : null;
+    saveTodos();
+    renderTodos();
+    return { done: t.done };
+  }
+  return null;
+}
+
+function deleteTodo(id) {
+  state.todos = state.todos.filter(function (t) {
+    return t.id !== id;
+  });
+  saveTodos();
+  renderTodos();
+}
+
+/**
+ * 排序（只在渲染时算，不落盘）：
+ *   1. 未完成在前
+ *   2. 未完成内部：dueDate <= 今天（今日 + 逾期）置顶
+ *   3. 同组按 dueDate 升序，再按创建日期
+ */
+function sortedTodos() {
+  var today = todayStr();
+  return state.todos.slice().sort(function (a, b) {
+    if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+
+    var aDue = a.dueDate <= today;
+    var bDue = b.dueDate <= today;
+    if (aDue !== bDue) return aDue ? -1 : 1;
+
+    if (a.dueDate !== b.dueDate) return a.dueDate < b.dueDate ? -1 : 1;
+    return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1;
+  });
+}
+
+/** N 的口径：未完成 且 dueDate <= 今天（今日到期 + 逾期）。 */
+function todayTodoCount() {
+  var today = todayStr();
+  var n = 0;
+  for (var i = 0; i < state.todos.length; i++) {
+    var t = state.todos[i];
+    if (!t.done && t.dueDate <= today) n++;
+  }
+  return n;
+}
+
+/** 把 'YYYY-MM-DD' 变成人话（只用于展示）。 */
+function humanDue(dueDate, today) {
+  var d1 = new Date(dueDate + 'T00:00:00');
+  var d2 = new Date(today + 'T00:00:00');
+  var diff = Math.round((d1 - d2) / 86400000);
+  if (diff === 0) return '今天';
+  if (diff === -1) return '昨天';
+  if (diff === 1) return '明天';
+  if (diff < 0) return Math.abs(diff) + ' 天前';
+  return diff + ' 天后';
+}
+
+function buildTodoItem(todo, today) {
+  var isDone = !!todo.done;
+  var isOverdue = !isDone && todo.dueDate < today;
+  var isToday = !isDone && todo.dueDate === today;
+
+  var li = document.createElement('li');
+  li.className = 'todo-item' + (isDone ? ' is-done' : '') + (isOverdue ? ' is-overdue' : '');
+  li.dataset.id = todo.id;
+
+  var check = document.createElement('input');
+  check.type = 'checkbox';
+  check.className = 'todo-check';
+  check.checked = isDone;
+  check.setAttribute('aria-label', '完成待办「' + todo.text + '」');
+
+  var text = document.createElement('span');
+  text.className = 'todo-text';
+  text.textContent = todo.text;
+
+  var due = document.createElement('span');
+  due.className = 'todo-due' + (isToday ? ' is-today' : '');
+  if (isDone) {
+    due.textContent = '已完成';
+  } else if (isOverdue) {
+    due.textContent = '逾期 ' + humanDue(todo.dueDate, today);
+  } else {
+    due.textContent = humanDue(todo.dueDate, today);
+  }
+
+  var del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'todo-delete';
+  del.textContent = '×';
+  del.title = '删除';
+  del.setAttribute('aria-label', '删除待办「' + todo.text + '」');
+
+  li.appendChild(check);
+  li.appendChild(text);
+  li.appendChild(due);
+  li.appendChild(del);
+  return li;
+}
+
+function renderTodos() {
+  if (!todoListEl) return;
+
+  var today = todayStr();
+  var list = sortedTodos();
+  todoListEl.textContent = '';
+  for (var i = 0; i < list.length; i++) {
+    todoListEl.appendChild(buildTodoItem(list[i], today));
+  }
+
+  if (todoEmptyEl) todoEmptyEl.hidden = state.todos.length > 0;
+
+  // 今日完成数（需求第 4 条的即时反馈；历史留痕在统计视图）
+  if (todoSummaryEl) {
+    var doneToday = 0;
+    for (var d = 0; d < state.todos.length; d++) {
+      if (state.todos[d].completedAt === today) doneToday++;
+    }
+    todoSummaryEl.hidden = doneToday === 0;
+    todoSummaryEl.textContent = doneToday > 0 ? '今天已完成 ' + doneToday + ' 项待办' : '';
+  }
+
+  renderTodoAlert();
+}
+
+/**
+ * 顶部提示条（需求第 3 条）：
+ *   N>0 → 「今天还有 N 项待办」
+ *   N=0 且今天确实有过待办 → 「今天的待办已清空 ✓」，3 秒后淡出
+ *   没有任何今日待办 → 不出现
+ * 不弹窗、不骚扰。
+ */
+function renderTodoAlert() {
+  if (!todoAlertEl) return;
+
+  var n = todayTodoCount();
+  if (n > 0) {
+    if (todoAlertTimer) { clearTimeout(todoAlertTimer); todoAlertTimer = null; }
+    todoAlertEl.hidden = false;
+    todoAlertEl.className = 'todo-alert';
+    todoAlertEl.textContent = '今天还有 ' + n + ' 项待办';
+    return;
+  }
+
+  var today = todayStr();
+  var hadToday = false;
+  for (var i = 0; i < state.todos.length; i++) {
+    if (state.todos[i].dueDate <= today) { hadToday = true; break; }
+  }
+
+  if (hadToday) {
+    todoAlertEl.hidden = false;
+    todoAlertEl.className = 'todo-alert is-clear';
+    todoAlertEl.textContent = '今天的待办已清空 ✓';
+    if (todoAlertTimer) clearTimeout(todoAlertTimer);
+    todoAlertTimer = setTimeout(function () {
+      if (todoAlertEl) todoAlertEl.hidden = true;
+    }, 3000);
+  } else {
+    if (todoAlertTimer) { clearTimeout(todoAlertTimer); todoAlertTimer = null; }
+    todoAlertEl.hidden = true;
+  }
+}
+
+/**
+ * 统计视图：最近 7 天每天完成了几项待办（需求第 4 条的留痕展示）。
+ * 数据全部从 completedAt 推导，没有额外的日志结构。
+ */
+function renderTodoStats() {
+  if (!todoStatsEl || !todoStatsListEl) return;
+
+  var counts = {};
+  for (var i = 0; i < state.todos.length; i++) {
+    var c = state.todos[i].completedAt;
+    if (c) counts[c] = (counts[c] || 0) + 1;
+  }
+
+  var days = [];
+  var cursor = new Date();
+  for (var d = 0; d < 7; d++) {
+    days.push(toDateStr(cursor));
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  todoStatsListEl.textContent = '';
+  var any = false;
+  for (var k = 0; k < days.length; k++) {
+    var n = counts[days[k]] || 0;
+    if (n > 0) any = true;
+    var row = document.createElement('li');
+    row.className = 'todo-stats-row';
+    row.textContent = days[k] + '　' + (n > 0 ? n + ' 项' : '—');
+    todoStatsListEl.appendChild(row);
+  }
+
+  todoStatsEl.hidden = !any;
+}
+
 /* ---------- 渲染 ---------- */
 
 function showHint(message) {
@@ -371,6 +653,9 @@ function render() {
   emptyEl.hidden = state.habits.length > 0;
   // 筛选无命中（有习惯但都不匹配），SKILL.md 规则 4：两种空态分开
   noResultEl.hidden = !(state.habits.length > 0 && shown.length === 0);
+
+  // Day 29：待办和习惯是两类条目，同一页各自渲染
+  renderTodos();
 }
 
 /* ---------- Day 13：视图路由 ---------- */
@@ -565,6 +850,9 @@ function renderStats() {
     statsListEl.appendChild(buildItem(ranked[i]));
   }
   statsEmptyEl.hidden = state.habits.length > 0;
+
+  // Day 29：待办的最近 7 天完成留痕，跟着统计视图一起刷新
+  renderTodoStats();
 }
 
 /* ---------- 事件绑定 ---------- */
@@ -659,6 +947,9 @@ function exportData() {
     source: USE_CLOUD ? 'cloud' : 'local',
     total: state.habits.length,
     habits: state.habits,
+    // Day 29：待办也一起导出，免得误以为备份了全部数据
+    todoTotal: state.todos.length,
+    todos: state.todos,
   };
   var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
@@ -674,6 +965,44 @@ function exportData() {
 
 if (exportBtnEl) {
   exportBtnEl.addEventListener('click', exportData);
+}
+
+/* ---------- Day 29：待办事件 ---------- */
+
+// 截止日期默认今天（用户可改）
+if (todoDateEl) {
+  todoDateEl.value = todayStr();
+}
+
+if (todoFormEl) {
+  todoFormEl.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var due = (todoDateEl && todoDateEl.value) ? todoDateEl.value : todayStr();
+    var result = addTodo(todoInputEl ? todoInputEl.value : '', due);
+    if (result.ok) {
+      if (todoInputEl) todoInputEl.value = '';
+      if (todoDateEl) todoDateEl.value = todayStr();
+      showHint('');
+    }
+  });
+}
+
+if (todoListEl) {
+  // 事件委托：一个监听器管住整张待办列表
+  todoListEl.addEventListener('click', function (event) {
+    var target = event.target;
+    if (!target || !target.closest) return;
+    var li = target.closest('.todo-item');
+    if (!li) return;
+    var id = li.dataset.id;
+
+    if (target.classList && target.classList.contains('todo-check')) {
+      toggleTodo(id);
+    } else if (target.classList && target.classList.contains('todo-delete')) {
+      var ok = window.confirm('确定删除这条待办吗？');
+      if (ok) deleteTodo(id);
+    }
+  });
 }
 
 formEl.addEventListener('submit', function (event) {
@@ -764,6 +1093,9 @@ function loadFromCloud() {
  * 公网 → 云端；本地 → localStorage（Day 13 的原逻辑，一行没动）。
  */
 function bootstrap() {
+  // Day 29：待办先读（纯本地），和习惯的数据源互不阻塞
+  loadTodos();
+
   // 底部那句数据来源跟着实际数据源走：本地打开却写着「来自云端」会误导人
   var srcEl = document.getElementById('habit-source');
   if (srcEl) {

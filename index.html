@@ -10,7 +10,7 @@
   <main class="app">
 
     <header class="app-header">
-      <h1 class="app-title">今日打卡</h1>
+      <h1 class="app-title">今日打卡 <span class="version-badge" id="app-version">v1.2.0</span></h1>
       <p class="app-date" id="today-date"></p>
     </header>
 
@@ -29,6 +29,34 @@
     <!-- ========== list 视图 ========== -->
 
     <section id="view-list" class="view-panel">
+
+      <!-- ===== Day 29：今日待办 =====
+           待办和习惯是两类条目：待办走 localStorage key=todos，习惯走 habits。
+           两者数据源完全独立，待办坏了不能拖垮习惯列表。 -->
+      <div class="todo-section" id="todo-section">
+        <!-- 顶部提示条：N>0 显示「今天还有 N 项待办」；全清完短暂显示已完成 -->
+        <div class="todo-alert" id="todo-alert" hidden></div>
+
+        <form class="todo-form" id="todo-form" autocomplete="off">
+          <input
+            type="text"
+            id="todo-input"
+            class="todo-input"
+            placeholder="加个待办，比如：交作业"
+            maxlength="50"
+            aria-label="待办内容"
+          />
+          <input type="date" id="todo-date" class="todo-date" aria-label="截止日期" />
+          <button type="submit" class="todo-add-btn">添加</button>
+        </form>
+
+        <ul class="todo-list" id="todo-list"></ul>
+        <p class="todo-empty" id="todo-empty" hidden>今天没有待办，加一个吧</p>
+        <p class="todo-summary" id="todo-summary" hidden></p>
+      </div>
+
+      <h2 class="section-title">习惯</h2>
+
       <form class="add-form" id="add-form" autocomplete="off">
         <input
           type="text"
@@ -98,6 +126,12 @@
           <ul id="stats-list" class="habit-list"></ul>
           <p class="empty-state" id="stats-empty" hidden>还没有习惯，先添加一个再来看统计</p>
         </div>
+
+        <!-- Day 29：最近 7 天待办完成数（需求第 4 条的留痕展示） -->
+        <div class="todo-stats" id="todo-stats" hidden>
+          <h3 class="todo-stats-title">最近 7 天待办完成</h3>
+          <ul class="todo-stats-list" id="todo-stats-list"></ul>
+        </div>
       </div>
     </section>
 
@@ -113,8 +147,10 @@
       <!-- Day 28 余力加练：数据导出。验收表「额度、到期和备份」要求有数据导出说明 -->
       <p class="meta-row">
         <button type="button" class="export-btn" id="export-btn">导出数据 (JSON)</button>
-        <span class="export-hint">下载当前全部习惯与打卡记录的备份文件</span>
+        <span class="export-hint">下载当前全部习惯、打卡记录与待办的备份文件</span>
       </p>
+      <!-- Day 29：版本记录（详细历史见 CHANGELOG.md） -->
+      <p class="meta-row version-log" id="version-log">版本记录：v1.2.0 · Day 29 今日待办</p>
     </footer>
   </main>
 
