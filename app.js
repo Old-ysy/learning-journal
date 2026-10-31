@@ -91,6 +91,12 @@ var errorRetryEl = document.getElementById('error-retry');
 var statsListEl = document.getElementById('stats-list');
 var statsEmptyEl = document.getElementById('stats-empty');
 
+// v1.6.0：统计页的今日清单部分
+var dailyStatsEl = document.getElementById('daily-stats');
+var dailyStatsSummaryEl = document.getElementById('daily-stats-summary');
+var weekGridEl = document.getElementById('week-grid');
+var dailyStatsListEl = document.getElementById('daily-stats-list');
+
 // Day 28 余力加练：数据导出按钮（测试夹具没有这个节点，用判空保护）
 var exportBtnEl = document.getElementById('export-btn');
 
@@ -608,6 +614,181 @@ function renderTodoStats() {
   }
 
   todoStatsEl.hidden = !any;
+}
+
+/* ============================================================
+   v1.6.0：统计页的「今日清单」部分
+   ------------------------------------------------------------
+   数据全部从 daily-log（key = 清单项 id）推导，不新增任何存储：
+     每日条数 = 那天有几个 key 勾过
+     连续天数 = dailyStreak(key)，今天没勾就是 0
+     累计次数 = 该 key 的日期数组长度
+   只统计「当前清单里还在的项」：删掉的项记录仍留在 localStorage，
+   加回来能接上，但不占统计面板（否则删了还赖在榜上更奇怪）。
+   ============================================================ */
+
+var WEEK_LABEL = ['日', '一', '二', '三', '四', '五', '六'];
+
+/** 只认形如 2026-10-31 且月份/日期在范围内 —— '2026-13-99' 这种也得挡掉 */
+function isDayStr(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  var p = s.split('-');
+  var m = Number(p[1]);
+  var d = Number(p[2]);
+  return m >= 1 && m <= 12 && d >= 1 && d <= 31;
+}
+
+/** 'YYYY-MM-DD' → 星期几的文字（'周日'） */
+function weekdayText(dateStr) {
+  var p = dateStr.split('-');
+  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  return '周' + WEEK_LABEL[d.getDay()];
+}
+
+/** 最近 7 天，从 6 天前到今天（左旧右新） */
+function lastWeekDays() {
+  var out = [];
+  var d = new Date();
+  d.setDate(d.getDate() - 6);
+  for (var i = 0; i < 7; i++) {
+    out.push(toDateStr(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function renderDailyStats() {
+  if (!dailyStatsEl) return;
+
+  var today = todayStr();
+  var tasks = (state.plan && state.plan.tasks) || [];
+
+  var dayCount = {};   // 'YYYY-MM-DD' → 那天勾了几项
+  var items = [];
+  var doneToday = 0;
+  var i, j, k;
+
+  for (i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    var rec = state.dailyLog ? state.dailyLog[t.id] : null;
+    var seen = {};
+    var days = [];
+
+    if (Array.isArray(rec)) {
+      for (j = 0; j < rec.length; j++) {
+        var ds = rec[j];
+        // 脏数据（null / 不是日期 / 13 月 99 日）直接跳过，别让一条坏记录毁掉整页
+        if (!isDayStr(ds)) continue;
+        if (seen[ds]) continue;
+        seen[ds] = true;
+        days.push(ds);
+        dayCount[ds] = (dayCount[ds] || 0) + 1;
+      }
+    }
+
+    if (seen[today]) doneToday++;
+    items.push({
+      name: t.name,
+      streak: dailyStreak(t.id),
+      total: days.length
+    });
+  }
+
+  // 一条记录都没有 → 这块不出现，别在统计页摆一排 0
+  var hasAny = false;
+  for (i = 0; i < items.length; i++) {
+    if (items[i].total > 0) { hasAny = true; break; }
+  }
+  dailyStatsEl.hidden = !hasAny;
+
+  if (!hasAny) {
+    if (weekGridEl) weekGridEl.textContent = '';
+    if (dailyStatsListEl) dailyStatsListEl.textContent = '';
+    return;
+  }
+
+  var cells = lastWeekDays();
+  var weekDays = 0;
+  for (k = 0; k < cells.length; k++) {
+    if (dayCount[cells[k]]) weekDays++;
+  }
+
+  var maxStreak = 0;
+  for (i = 0; i < items.length; i++) {
+    if (items[i].streak > maxStreak) maxStreak = items[i].streak;
+  }
+
+  // 摘要行：今天 x/y · 这 7 天有 N 天打卡 · 最长连续 M 天
+  if (dailyStatsSummaryEl) {
+    dailyStatsSummaryEl.textContent = '今天 ' + doneToday + '/' + tasks.length +
+      ' · 这 7 天有 ' + weekDays + ' 天打卡' +
+      (maxStreak > 0 ? ' · 最长连续 ' + maxStreak + ' 天' : '');
+  }
+
+  // 7 格热力条
+  if (weekGridEl) {
+    weekGridEl.textContent = '';
+    for (k = 0; k < cells.length; k++) {
+      var day = cells[k];
+      var n = dayCount[day] || 0;
+      var lv = n === 0 ? 0 : (n >= 4 ? 4 : n >= 3 ? 3 : n >= 2 ? 2 : 1);
+
+      var cell = document.createElement('div');
+      cell.className = 'week-cell' + (lv ? ' is-lv' + lv : '') + (day === today ? ' is-today' : '');
+      cell.setAttribute('role', 'listitem');
+      cell.setAttribute('title', shortDate(day) + ' ' + weekdayText(day) + '：' + (n ? n + ' 项' : '没打卡'));
+
+      var lbl = document.createElement('span');
+      lbl.className = 'week-day';
+      lbl.textContent = day === today ? '今天' : weekdayText(day);
+
+      var num = document.createElement('span');
+      num.className = 'week-num';
+      num.textContent = n ? String(n) : '·';
+
+      cell.appendChild(lbl);
+      cell.appendChild(num);
+      weekGridEl.appendChild(cell);
+    }
+  }
+
+  // 每项：连续 N 天 · 共 M 次（连续长的排前面）
+  if (dailyStatsListEl) {
+    var ranked = items.filter(function (x) { return x.total > 0; });
+    ranked.sort(function (a, b) {
+      return (b.streak - a.streak) || (b.total - a.total);
+    });
+
+    dailyStatsListEl.textContent = '';
+    for (i = 0; i < ranked.length; i++) {
+      var row = document.createElement('li');
+      row.className = 'daily-stats-row';
+
+      var nm = document.createElement('span');
+      nm.className = 'daily-stats-name';
+      nm.textContent = ranked[i].name;
+      nm.title = ranked[i].name;
+
+      var mt = document.createElement('span');
+      mt.className = 'daily-stats-meta';
+      if (ranked[i].streak > 1) {
+        var st = document.createElement('span');
+        st.className = 'daily-stats-streak';
+        st.textContent = '连续 ' + ranked[i].streak + ' 天';
+        mt.appendChild(st);
+        var sep = document.createElement('span');
+        sep.textContent = ' · ';
+        mt.appendChild(sep);
+      }
+      var cnt = document.createElement('span');
+      cnt.textContent = '共 ' + ranked[i].total + ' 次';
+      mt.appendChild(cnt);
+
+      row.appendChild(nm);
+      row.appendChild(mt);
+      dailyStatsListEl.appendChild(row);
+    }
+  }
 }
 
 /* ============================================================
@@ -1878,7 +2059,10 @@ function renderStats() {
   }
   statsEmptyEl.hidden = state.habits.length > 0;
 
-  // Day 29：待办的最近 7 天完成留痕，跟着统计视图一起刷新
+  // 今日清单的坚持情况（v1.6.0）—— 在 HTML 里就排在最前面，这块才是每天真在用的
+  renderDailyStats();
+
+  // 待办的最近 7 天完成留痕，跟着统计视图一起刷新
   renderTodoStats();
 }
 

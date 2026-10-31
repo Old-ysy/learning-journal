@@ -745,6 +745,120 @@ a:focus-visible,
   text-align: right;
 }
 
+/* ----- v1.6.0 统计：今日清单的坚持情况 ----- */
+
+.daily-stats {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.daily-stats-title {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.daily-stats-summary {
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 7 格热力条：颜色越深勾得越多，今天那格描蓝边 */
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.3rem;
+}
+
+.week-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.45rem 0 0.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.week-day {
+  font-size: 0.6rem;
+  line-height: 1;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.week-num {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.week-cell.is-lv1 { background: #dcfce7; border-color: #bbf7d0; }
+.week-cell.is-lv2 { background: #bbf7d0; border-color: #86efac; }
+.week-cell.is-lv3 { background: #86efac; border-color: #4ade80; }
+.week-cell.is-lv4 { background: #4ade80; border-color: #22c55e; }
+
+/* 深色档位的文字统一压成深绿，保证 4.5:1 以上 */
+.week-cell[class*='is-lv'] .week-num { color: #14532d; }
+.week-cell[class*='is-lv'] .week-day { color: #166534; }
+
+.week-cell.is-today {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.week-cell.is-today .week-day {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 每项：名字 + 连续/累计 */
+.daily-stats-list {
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily-stats-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  font-size: 0.85rem;
+  border-bottom: 1px dashed var(--border);
+}
+
+.daily-stats-row:last-child {
+  border-bottom: none;
+}
+
+.daily-stats-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-stats-meta {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.daily-stats-streak {
+  color: var(--streak-text);
+}
+
 /* 统计视图：最近 7 天待办完成 */
 .todo-stats {
   margin-top: 1.75rem;
