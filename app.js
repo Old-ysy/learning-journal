@@ -22,11 +22,20 @@ var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四',
 // 计划本身写在 plan.js 里不进存储，这里只存「哪天做了」。
 var DAILY_KEY = 'daily-log';
 
-// Day 31：用户自己加的计划项。和 daily-log 分开：一个是「做过没」，
-// 一个是「有哪些项」，删项时不该连历史打卡一起抹掉。
-var CUSTOM_PLAN_KEY = 'custom-plan';
-var MAX_CUSTOM_PLANS = 10;     // 上限：加满 10 条已经不是「计划」是待办了
-var MAX_CUSTOM_LEN = 20;       // 和习惯名同一档，将来服务端校验口径一致
+// v1.5.0：计划本身也是用户数据（v1.4.0 之前计划写死在 plan.js 里，
+// 改个考试日期都得找我改代码 —— 那不叫能自己用的工具）。
+// plan.js 降级成「首次打开 / 恢复默认」用的种子。
+var PLAN_KEY = 'plan-data';
+var OLD_CUSTOM_KEY = 'custom-plan';   // 只为把 v1.4.0 的老数据搬过来，搬完不再写
+var MAX_TASKS = 30;                   // 清单项上限：再多也不叫清单了
+var MAX_PHASES = 12;                  // 阶段上限
+var MAX_TITLE_LEN = 20;               // 清单项名字长度，和习惯名同一档
+var MAX_PHASE_NAME_LEN = 20;
+var TASK_GROUPS = [
+  { key: 'phase', label: '当前阶段' },
+  { key: 'daily', label: '每日固定' },
+  { key: 'mine',  label: '我的计划' }
+];
 
 /* ---------- Day 20：数据源 -------------
  * 公网 https 页面 → 从云端拉真实数据
@@ -51,7 +60,8 @@ var state = {
   habits: [],   // [{ id, name, createdAt, records: ['YYYY-MM-DD', ...] }]
   todos: [],    // Day 29：[{ id, text, dueDate, done, createdAt, completedAt }]
   dailyLog: {}, // Day 30：{ words: ['2026-10-31', ...], 'course-c1-main': [...], ... }
-  customPlans: [], // Day 31：[{ id, name, createdAt }] 用户自己加的计划项
+  plan: null,   // v1.5.0：{ version, phases: [], tasks: [], cetExam: {} } 计划全量数据
+  editing: false,      // 清单/阶段管理面板是否展开
   filter: ''    // 筛选只作用于显示，不持久化（SKILL.md 规则 1）
 };
 
@@ -97,16 +107,29 @@ var todoStatsEl = document.getElementById('todo-stats');
 var todoStatsListEl = document.getElementById('todo-stats-list');
 var todoAlertTimer = null;
 
-// Day 30：学习计划看板。同样判空——测试夹具里没有这些节点，
+// Day 30 / v1.5.0：学习计划看板。同样判空——测试夹具里没有这些节点，
 // 计划区坏了也不能让习惯/待办跟着崩。
 var planNowEl = document.getElementById('plan-now');
 var dailyListEl = document.getElementById('daily-list');
 var dailyCountEl = document.getElementById('daily-count');
-// Day 31：自定义计划输入（夹具里可能没有这两个节点，用判空保护）
 var planAddFormEl = document.getElementById('plan-add-form');
 var planAddInputEl = document.getElementById('plan-add-input');
+var planAddGroupEl = document.getElementById('plan-add-group');
 var phaseListEl = document.getElementById('phase-list');
 var cetListEl = document.getElementById('cet-list');
+
+// v1.5.0：管理面板（清单项 / 阶段都能在页面上改，不用改代码）
+var taskEditBtnEl = document.getElementById('plan-edit-btn');
+var taskEditorEl = document.getElementById('task-editor');
+var taskEditorListEl = document.getElementById('task-editor-list');
+var phaseEditBtnEl = document.getElementById('phase-edit-btn');
+var phaseEditorEl = document.getElementById('phase-editor');
+var phaseEditorListEl = document.getElementById('phase-editor-list');
+var phaseAddCourseEl = document.getElementById('phase-add-course');
+var phaseAddCetEl = document.getElementById('phase-add-cet');
+var cetExamNameEl = document.getElementById('cet-exam-name');
+var cetExamDateEl = document.getElementById('cet-exam-date');
+var planResetEl = document.getElementById('plan-reset');
 
 // 当前视图与列表状态（仅内存，不持久化——刷新就回到默认）
 var currentView = 'list';      // list | detail | stats
@@ -587,7 +610,16 @@ function renderTodoStats() {
   todoStatsEl.hidden = !any;
 }
 
-/* ---------- Day 30：学习计划与每日四件 ---------- */
+/* ============================================================
+   v1.5.0：学习计划
+   ------------------------------------------------------------
+   设计原则（v1.4.0 之前是反例）：
+   计划不是「程序员写死的配置」，是用户自己的数据。所以 phases / tasks
+   全部存在 localStorage（key = plan-data），页面上能增删改，改坏了能恢复默认。
+   plan.js 只在两种时候起作用：第一次打开、点「恢复默认计划」。
+
+   打卡 key = task.id。改名字、换分组都不会丢历史记录。
+   ============================================================ */
 
 /**
  * 两个 'YYYY-MM-DD' 相差多少天（to - from）。
@@ -608,6 +640,8 @@ function shortDate(str) {
   return Number(p[1]) + '/' + Number(p[2]);
 }
 
+/* ---------- 打卡记录（key = task.id）---------- */
+
 function loadDailyLog() {
   state.dailyLog = {};
   try {
@@ -618,8 +652,8 @@ function loadDailyLog() {
       state.dailyLog = parsed;
     }
   } catch (err) {
-    // 和 loadTodos 一样：四件坏了不能拖垮主页面
-    console.error('每日打卡记录读取失败，按空处理：', err);
+    // 和 loadTodos 一样：坏了不能拖垮主页面
+    console.error('打卡记录读取失败，按空处理：', err);
   }
 }
 
@@ -628,90 +662,9 @@ function saveDailyLog() {
     localStorage.setItem(DAILY_KEY, JSON.stringify(state.dailyLog));
     return true;
   } catch (err) {
-    console.error('每日打卡记录写入失败：', err);
+    console.error('打卡记录写入失败：', err);
     return false;
   }
-}
-
-/* ---------- Day 31：自定义计划项 ---------- */
-
-function loadCustomPlans() {
-  state.customPlans = [];
-  try {
-    var raw = localStorage.getItem(CUSTOM_PLAN_KEY);
-    if (!raw) return;
-    var parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return;
-    // 逐条筛：坏数据丢掉整条，不能因为一条脏数据让整个清单独不出来
-    for (var i = 0; i < parsed.length; i++) {
-      var it = parsed[i];
-      if (it && typeof it.id === 'string' && typeof it.name === 'string' && it.name) {
-        state.customPlans.push({ id: it.id, name: it.name, createdAt: it.createdAt || 0 });
-      }
-    }
-  } catch (err) {
-    console.error('自定义计划读取失败，按空处理：', err);
-    state.customPlans = [];
-  }
-}
-
-function saveCustomPlans() {
-  try {
-    localStorage.setItem(CUSTOM_PLAN_KEY, JSON.stringify(state.customPlans));
-    return true;
-  } catch (err) {
-    console.error('自定义计划写入失败：', err);
-    return false;
-  }
-}
-
-/** 自定义项的打卡 key。id 里带 cp_ 前缀，拼出来的 key 一眼能认出是用户加的 */
-function customKey(id) {
-  return 'custom-' + id;
-}
-
-function addCustomPlan(text) {
-  var name = String(text == null ? '' : text).trim();
-
-  if (!name) return { ok: false, message: '写点什么再加（1–20 字）' };
-  // 中文按 1 个字算：Array.from 走的是码点，emoji 也不会被算成 2 个
-  var len = Array.from(name).length;
-  if (len > MAX_CUSTOM_LEN) {
-    return { ok: false, message: '最多 ' + MAX_CUSTOM_LEN + ' 个字，现在 ' + len + ' 个' };
-  }
-  if (state.customPlans.length >= MAX_CUSTOM_PLANS) {
-    return { ok: false, message: '最多 ' + MAX_CUSTOM_PLANS + ' 项，先删几条吧' };
-  }
-  for (var i = 0; i < state.customPlans.length; i++) {
-    if (state.customPlans[i].name === name) {
-      return { ok: false, message: '「' + name + '」已经在清单里了' };
-    }
-  }
-
-  state.customPlans.push({
-    // 随机尾巴防同毫秒撞车；不用数组下标——删中间一条后下标前移，
-    // 历史记录（custom-<id>）会错误地挂到别的项上
-    id: 'cp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    name: name,
-    createdAt: Date.now(),
-  });
-  saveCustomPlans();
-  renderDailyList();
-  return { ok: true };
-}
-
-function deleteCustomPlan(id) {
-  var before = state.customPlans.length;
-  state.customPlans = state.customPlans.filter(function (item) {
-    return item.id !== id;
-  });
-  if (state.customPlans.length === before) return;
-
-  saveCustomPlans();
-
-  // daily-log 里 custom-<id> 的历史留着不删：那天做过是事实，
-  // 不因为今天不想看了就被抹掉（TECH_DESIGN.md 3.3）
-  renderDailyList();
 }
 
 function isDailyDone(key, day) {
@@ -723,6 +676,7 @@ function isDailyDone(key, day) {
 function dailyStreak(key) {
   var rec = state.dailyLog[key];
   if (!Array.isArray(rec) || rec.length === 0) return 0;
+
   var set = {};
   for (var i = 0; i < rec.length; i++) set[rec[i]] = true;
 
@@ -737,6 +691,8 @@ function dailyStreak(key) {
 }
 
 function toggleDaily(key) {
+  if (!findTask(key)) return;
+
   var day = todayStr();
   var rec = state.dailyLog[key];
   if (!Array.isArray(rec)) rec = state.dailyLog[key] = [];
@@ -749,79 +705,446 @@ function toggleDaily(key) {
   renderDailyList();
 }
 
-/** active = 日期落在区间内；upcoming = 还没开始；done = 已经过去 */
+/* ---------- 数据层 ---------- */
+
+function clonePlan(src) {
+  return JSON.parse(JSON.stringify(src));
+}
+
+/** 默认模板 → 可用的 plan 对象（深拷贝，改它不会污染 window.DEFAULT_PLAN） */
+function blankPlan() {
+  var seed = clonePlan(window.DEFAULT_PLAN || { phases: [], tasks: [] });
+  if (!Array.isArray(seed.phases)) seed.phases = [];
+  if (!Array.isArray(seed.tasks)) seed.tasks = [];
+  seed.version = 2;
+  seed.bound = { course: '', cet: '' };
+  return seed;
+}
+
+/**
+ * 读出来的东西一律先过一遍：结构不对的条目丢掉，不让一条脏数据搞崩整个看板。
+ * 宁可少一条，不能整块白屏。
+ */
+function sanitizePlan(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  var out = {
+    version: 2,
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : '',
+    phases: [],
+    tasks: [],
+    cetExam: {
+      name: raw.cetExam && typeof raw.cetExam.name === 'string' ? raw.cetExam.name : '六级考试',
+      date: raw.cetExam && typeof raw.cetExam.date === 'string' ? raw.cetExam.date : ''
+    },
+    bound: {
+      course: raw.bound && typeof raw.bound.course === 'string' ? raw.bound.course : '',
+      cet: raw.bound && typeof raw.bound.cet === 'string' ? raw.bound.cet : ''
+    }
+  };
+
+  var i;
+  if (Array.isArray(raw.phases)) {
+    for (i = 0; i < raw.phases.length && out.phases.length < MAX_PHASES; i++) {
+      var p = raw.phases[i];
+      if (!p || typeof p.id !== 'string' || !p.id) continue;
+      out.phases.push({
+        id: p.id,
+        track: p.track === 'cet' ? 'cet' : 'course',
+        name: typeof p.name === 'string' ? p.name : '',
+        start: typeof p.start === 'string' ? p.start : '',
+        end: typeof p.end === 'string' ? p.end : '',
+        main: typeof p.main === 'string' ? p.main : '',
+        secondary: typeof p.secondary === 'string' ? p.secondary : '',
+        examName: typeof p.examName === 'string' ? p.examName : '',
+        examDate: typeof p.examDate === 'string' ? p.examDate : ''
+      });
+    }
+  }
+
+  if (Array.isArray(raw.tasks)) {
+    for (i = 0; i < raw.tasks.length && out.tasks.length < MAX_TASKS; i++) {
+      var t = raw.tasks[i];
+      if (!t || typeof t.id !== 'string' || !t.id) continue;
+      if (typeof t.name !== 'string' || !t.name) continue;
+      out.tasks.push({
+        id: t.id,
+        name: t.name,
+        group: t.group === 'phase' || t.group === 'daily' ? t.group : 'mine'
+      });
+    }
+  }
+
+  return out;
+}
+
+function loadPlan() {
+  var loaded = null;
+  try {
+    var raw = localStorage.getItem(PLAN_KEY);
+    if (raw) loaded = sanitizePlan(JSON.parse(raw));
+  } catch (err) {
+    console.error('计划数据读取失败，回退到默认模板：', err);
+  }
+
+  if (loaded) {
+    state.plan = loaded;
+    return;
+  }
+
+  state.plan = blankPlan();
+  migrateOldCustom(state.plan);
+  savePlan();
+}
+
+/**
+ * v1.4.0 的 custom-plan 搬进 tasks。
+ * id 直接用老的打卡 key（custom-<老id>），所以那几天的记录一条都不丢。
+ */
+function migrateOldCustom(plan) {
+  var raw = null;
+  try {
+    raw = localStorage.getItem(OLD_CUSTOM_KEY);
+  } catch (err) {
+    return;
+  }
+  if (!raw) return;
+
+  try {
+    var arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return;
+    for (var i = 0; i < arr.length; i++) {
+      var it = arr[i];
+      // id 必须校验：没有 id 会拼出 'custom-undefined' 这种垃圾 key
+      if (!it || typeof it.id !== 'string' || !it.id) continue;
+      if (typeof it.name !== 'string' || !it.name) continue;
+      if (plan.tasks.length >= MAX_TASKS) break;
+      plan.tasks.push({
+        id: 'custom-' + it.id,
+        name: Array.from(it.name).slice(0, MAX_TITLE_LEN).join(''),
+        group: 'mine'
+      });
+    }
+  } catch (err) {
+    console.error('旧自定义计划迁移失败（不影响新数据）：', err);
+  }
+}
+
+function savePlan() {
+  try {
+    localStorage.setItem(PLAN_KEY, JSON.stringify(state.plan));
+    return true;
+  } catch (err) {
+    console.error('计划数据写入失败：', err);
+    return false;
+  }
+}
+
+/** 恢复默认：清掉自己的改动，回到 plan.js 的出厂设置 */
+function resetPlan() {
+  state.plan = blankPlan();
+  savePlan();
+  syncPhaseTasks(todayStr());
+  renderPlan();
+  showHint('已恢复默认计划');
+}
+
+/* ---------- 查询 ---------- */
+
+function planPhases(track) {
+  var out = [];
+  var list = (state.plan && state.plan.phases) || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].track === track) out.push(list[i]);
+  }
+  return out;
+}
+
+function findPhase(id) {
+  var list = (state.plan && state.plan.phases) || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].id === id) return list[i];
+  }
+  return null;
+}
+
+function findTask(id) {
+  var list = (state.plan && state.plan.tasks) || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].id === id) return list[i];
+  }
+  return null;
+}
+
+function activePhase(today, track) {
+  var list = planPhases(track);
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i];
+    if (p.start && p.end && today >= p.start && today <= p.end) return p;
+  }
+  return null;
+}
+
+/** active = 落在区间内；upcoming = 还没开始；done = 已过去 */
 function phaseStatus(phase, today) {
+  if (!phase.start || !phase.end) return 'upcoming';
   if (today < phase.start) return 'upcoming';
   if (today > phase.end) return 'done';
   return 'active';
 }
 
-/** 今天落在哪段课内阶段里（全考完之后返回 null） */
-function activeCourse(today) {
-  var plan = window.STUDY_PLAN;
-  if (!plan || !plan.courses) return null;
-  for (var i = 0; i < plan.courses.length; i++) {
-    if (today >= plan.courses[i].start && today <= plan.courses[i].end) return plan.courses[i];
-  }
-  return null;
+/* ---------- 清单项增删改 ---------- */
+
+function removeTaskById(id) {
+  state.plan.tasks = state.plan.tasks.filter(function (t) {
+    return t.id !== id;
+  });
 }
 
-/** 今天落在六级哪一段，返回 { index, stage }；不在任何一段就 null */
-function activeCetStage(today) {
-  var plan = window.STUDY_PLAN;
-  if (!plan || !plan.cet || !plan.cet.stages) return null;
-  for (var i = 0; i < plan.cet.stages.length; i++) {
-    var s = plan.cet.stages[i];
-    if (today >= s.start && today <= s.end) return { index: i, stage: s };
+/** 阶段那段的主攻/次攻同步进清单。名字变了跟着改；手删了不复活 */
+function syncOne(id, name, allowCreate) {
+  var tasks = state.plan.tasks;
+  var idx = -1;
+  for (var i = 0; i < tasks.length; i++) {
+    if (tasks[i].id === id) { idx = i; break; }
   }
-  return null;
+
+  if (!name) {
+    if (idx !== -1 && !allowCreate) tasks.splice(idx, 1);
+    return;
+  }
+  if (idx !== -1) {
+    tasks[idx].name = name;
+    return;
+  }
+  if (!allowCreate) return;
+  if (tasks.length >= MAX_TASKS) return;
+  tasks.push({ id: id, name: name, group: 'phase' });
+}
+
+function dropPhaseTasks(phaseId, track) {
+  if (!phaseId) return;
+  if (track === 'cet') {
+    removeTaskById('cet-' + phaseId);
+  } else {
+    removeTaskById('course-' + phaseId + '-main');
+    removeTaskById('course-' + phaseId + '-sec');
+  }
 }
 
 /**
- * 今日清单的全部条目，按组返回。
- * 顺序：当前阶段 → 每日固定 → 我的计划。
- * 阶段组排最前：它每天跟着日期变，也是最该先看的；四件天天一样，放后面。
- * 空组不返回，渲染时就不会留一个光秃秃的标题。
+ * 把「当前阶段」的主攻/次攻/六级重点同步进清单。
+ * allowCreate 只在阶段真的换人时为 true —— 这样你自己删掉的项本阶段内不会复活，
+ * 但阶段一换就会重新出现（那时候本来就该有一组新的）。
  */
-function buildPlanGroups(today) {
-  var plan = window.STUDY_PLAN || {};
-  var groups = [];
+function syncPhaseTasks(today) {
+  var plan = state.plan;
+  if (!plan) return;
+  if (!plan.bound) plan.bound = { course: '', cet: '' };
 
-  // 组 1：当前阶段的任务。key 里带阶段 id，换阶段就是新的一组记录，
-  // 旧记录留在 daily-log 里不删（TECH_DESIGN.md 3.3）
-  var stageItems = [];
-  var course = activeCourse(today);
+  var course = activePhase(today, 'course');
   if (course) {
-    // 名字保持原样，主/次用一个小标签表示：手机上两列格子塞不下「（保持手感）」
-    stageItems.push({ key: 'course-' + course.id + '-main', name: course.main, tag: '主' });
-    if (course.secondary) {
-      stageItems.push({ key: 'course-' + course.id + '-sec', name: course.secondary, tag: '次' });
+    var courseChanged = course.id !== plan.bound.course;
+    if (courseChanged) dropPhaseTasks(plan.bound.course, 'course');
+    plan.bound.course = course.id;
+    syncOne('course-' + course.id + '-main', course.main, courseChanged);
+    syncOne('course-' + course.id + '-sec', course.secondary, courseChanged);
+  }
+
+  var cet = activePhase(today, 'cet');
+  if (cet) {
+    var cetChanged = cet.id !== plan.bound.cet;
+    if (cetChanged) dropPhaseTasks(plan.bound.cet, 'cet');
+    plan.bound.cet = cet.id;
+    syncOne('cet-' + cet.id, cet.main ? '六级 · ' + cet.main : '', cetChanged);
+  }
+
+  savePlan();
+}
+
+function addTask(text, group) {
+  var name = String(text == null ? '' : text).trim();
+  var g = group === 'phase' || group === 'daily' ? group : 'mine';
+
+  if (!name) return { ok: false, message: '写点什么再加（1–' + MAX_TITLE_LEN + ' 字）' };
+
+  // 中文按 1 个字算：Array.from 走码点，emoji 不会被算成 2 个
+  var len = Array.from(name).length;
+  if (len > MAX_TITLE_LEN) {
+    return { ok: false, message: '最多 ' + MAX_TITLE_LEN + ' 个字，现在 ' + len + ' 个' };
+  }
+  if (state.plan.tasks.length >= MAX_TASKS) {
+    return { ok: false, message: '清单最多 ' + MAX_TASKS + ' 项，先删几条吧' };
+  }
+  for (var i = 0; i < state.plan.tasks.length; i++) {
+    if (state.plan.tasks[i].name === name && state.plan.tasks[i].group === g) {
+      return { ok: false, message: '这个组里已经有「' + name + '」了' };
     }
   }
-  var cet = activeCetStage(today);
-  if (cet) {
-    stageItems.push({
-      key: 'cet-' + cet.index,
-      name: cet.stage.focus ? '六级 · ' + cet.stage.focus : '六级',
-    });
-  }
-  if (stageItems.length) groups.push({ label: '当前阶段', items: stageItems });
 
-  // 组 2：plan.js 里的固定四件，原样搬过来
-  var dailyItems = [];
-  var daily = plan.daily || [];
-  for (var i = 0; i < daily.length; i++) {
-    dailyItems.push({ key: daily[i].key, name: daily[i].name });
-  }
-  if (dailyItems.length) groups.push({ label: '每日固定', items: dailyItems });
+  state.plan.tasks.push({
+    // 随机尾巴防同毫秒撞车；不用下标——删中间一条后下标前移会串记录
+    id: 'tk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    name: name,
+    group: g
+  });
+  savePlan();
+  renderPlan();
+  return { ok: true };
+}
 
-  // 组 3：用户自己加的
-  var mine = [];
-  for (var j = 0; j < state.customPlans.length; j++) {
-    var cp = state.customPlans[j];
-    mine.push({ key: customKey(cp.id), name: cp.name, customId: cp.id });
+function renameTask(id, value) {
+  var task = findTask(id);
+  if (!task) return { ok: false, message: '这一项已经不在了' };
+
+  var name = String(value == null ? '' : value).trim();
+  if (!name) {
+    renderPlan();
+    return { ok: false, message: '名字不能为空' };
   }
-  if (mine.length) groups.push({ label: '我的计划', items: mine });
+  if (Array.from(name).length > MAX_TITLE_LEN) {
+    renderPlan();
+    return { ok: false, message: '最多 ' + MAX_TITLE_LEN + ' 个字' };
+  }
+
+  task.name = name;
+  savePlan();
+  renderPlan();
+  return { ok: true };
+}
+
+function moveTask(id, group) {
+  var task = findTask(id);
+  if (!task) return;
+  if (group !== 'phase' && group !== 'daily' && group !== 'mine') return;
+  if (task.group === group) return;
+  task.group = group;
+  savePlan();
+  renderPlan();
+}
+
+function removeTask(id) {
+  var before = state.plan.tasks.length;
+  removeTaskById(id);
+  if (state.plan.tasks.length === before) return;
+
+  savePlan();
+  // daily-log 里这一项的历史留着：那天做过是事实，
+  // 不因为今天不想看了就被抹掉（TECH_DESIGN.md 3.3）
+  renderPlan();
+}
+
+/* ---------- 阶段增删改 ---------- */
+
+function addPhase(track) {
+  var t = track === 'cet' ? 'cet' : 'course';
+  if (state.plan.phases.length >= MAX_PHASES) {
+    showHint('最多 ' + MAX_PHASES + ' 个阶段');
+    return null;
+  }
+
+  var today = todayStr();
+  var phase = {
+    id: 'ph_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    track: t,
+    name: t === 'cet' ? '新的六级阶段' : '新的阶段',
+    start: today,
+    end: today,
+    main: '',
+    secondary: '',
+    examName: '',
+    examDate: ''
+  };
+
+  state.plan.phases.push(phase);
+  savePlan();
+  renderPlan();
+  return phase;
+}
+
+function updatePhase(id, fieldName, value) {
+  var p = findPhase(id);
+  if (!p) return { ok: false, message: '这个阶段已经不在了' };
+
+  var v = String(value == null ? '' : value);
+
+  if (fieldName === 'name') {
+    v = v.trim();
+    if (!v) { showHint('阶段名不能空着'); renderPlan(); return { ok: false }; }
+    if (Array.from(v).length > MAX_PHASE_NAME_LEN) {
+      showHint('阶段名最多 ' + MAX_PHASE_NAME_LEN + ' 个字');
+      renderPlan();
+      return { ok: false };
+    }
+  }
+  if (fieldName === 'track') {
+    if (v !== 'course' && v !== 'cet') return { ok: false };
+  }
+  if (fieldName === 'start' || fieldName === 'end') {
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return { ok: false };
+  }
+  if (fieldName === 'examDate' && v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return { ok: false };
+
+  var allowed = ['name', 'track', 'start', 'end', 'main', 'secondary', 'examName', 'examDate'];
+  if (allowed.indexOf(fieldName) === -1) return { ok: false };
+
+  p[fieldName] = v;
+
+  // 改日期/主攻后要重算清单里的阶段项：字段变了就允许重建
+  if (p.track === 'course' && p.id === (state.plan.bound || {}).course) {
+    state.plan.bound.course = '';   // 让 sync 视作「换了阶段」，把新名字写进去
+  }
+  savePlan();
+  syncPhaseTasks(todayStr());
+  renderPlan();
+  return { ok: true };
+}
+
+function deletePhase(id) {
+  var p = findPhase(id);
+  if (!p) return;
+
+  dropPhaseTasks(p.id, p.track);
+  if (state.plan.bound && state.plan.bound[p.track === 'cet' ? 'cet' : 'course'] === id) {
+    state.plan.bound[p.track === 'cet' ? 'cet' : 'course'] = '';
+  }
+  state.plan.phases = state.plan.phases.filter(function (x) {
+    return x.id !== id;
+  });
+
+  savePlan();
+  renderPlan();
+}
+
+function updateCetExam(fieldName, value) {
+  if (!state.plan.cetExam) state.plan.cetExam = { name: '六级考试', date: '' };
+  if (fieldName === 'date') {
+    var v = String(value == null ? '' : value);
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+    state.plan.cetExam.date = v;
+  } else if (fieldName === 'name') {
+    state.plan.cetExam.name = String(value == null ? '' : value).trim();
+  }
+  savePlan();
+  renderPlan();
+}
+
+/* ---------- 渲染：今日清单 ---------- */
+
+function buildPlanGroups() {
+  var groups = [];
+  var tasks = (state.plan && state.plan.tasks) || [];
+
+  for (var g = 0; g < TASK_GROUPS.length; g++) {
+    var items = [];
+    for (var i = 0; i < tasks.length; i++) {
+      if (tasks[i].group !== TASK_GROUPS[g].key) continue;
+      items.push({ key: tasks[i].id, name: tasks[i].name });
+    }
+    if (items.length) {
+      groups.push({ key: TASK_GROUPS[g].key, label: TASK_GROUPS[g].label, items: items });
+    }
+  }
 
   return groups;
 }
@@ -844,7 +1167,7 @@ function buildDailyItem(item, today) {
   var name = document.createElement('span');
   name.className = 'daily-name';
   name.textContent = item.name;
-  // 长名字（六级那段「刷真题 + 积累词汇短语句型」）靠 CSS 截断，hover 看全文
+  // 长名字靠 CSS 截断，hover 看全文
   name.title = item.name;
 
   var meta = document.createElement('span');
@@ -854,26 +1177,7 @@ function buildDailyItem(item, today) {
 
   li.appendChild(mark);
   li.appendChild(name);
-
-  if (item.tag) {
-    var tag = document.createElement('span');
-    tag.className = 'daily-tag';
-    tag.textContent = item.tag;
-    li.appendChild(tag);
-  }
-
   li.appendChild(meta);
-
-  // 自定义项才给删除按钮：固定四件和阶段任务是计划里定死的，删了没意义
-  if (item.customId) {
-    li.dataset.id = item.customId;
-    var del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'daily-del';
-    del.setAttribute('aria-label', '删除计划项：' + item.name);
-    del.textContent = '×';
-    li.appendChild(del);
-  }
 
   return li;
 }
@@ -882,7 +1186,7 @@ function renderDailyList() {
   if (!dailyListEl) return;
 
   var today = todayStr();
-  var groups = buildPlanGroups(today);
+  var groups = buildPlanGroups();
 
   var done = 0;
   var total = 0;
@@ -911,23 +1215,32 @@ function renderDailyList() {
     dailyListEl.appendChild(box);
   }
 
+  if (!groups.length) {
+    var empty = document.createElement('p');
+    empty.className = 'editor-empty';
+    empty.textContent = '清单是空的，下面加一条';
+    dailyListEl.appendChild(empty);
+  }
+
   if (dailyCountEl) dailyCountEl.textContent = done + '/' + total;
 }
 
+/* ---------- 渲染：现在主攻 ---------- */
+
 function renderPlanNow() {
   if (!planNowEl) return;
-  var plan = window.STUDY_PLAN;
   planNowEl.textContent = '';
-  if (!plan || !plan.courses) return;
+  if (!state.plan) return;
 
   var today = todayStr();
+  var list = planPhases('course');
   var active = null;
   var next = null;
 
-  for (var i = 0; i < plan.courses.length; i++) {
-    var st = phaseStatus(plan.courses[i], today);
-    if (st === 'active' && !active) active = plan.courses[i];
-    if (st === 'upcoming' && !next) next = plan.courses[i];
+  for (var i = 0; i < list.length; i++) {
+    var st = phaseStatus(list[i], today);
+    if (st === 'active' && !active) active = list[i];
+    if (st === 'upcoming' && !next) next = list[i];
   }
 
   var focus = active || next;
@@ -936,11 +1249,12 @@ function renderPlanNow() {
     var label = document.createElement('p');
     label.className = 'plan-now-label';
     label.textContent = active ? '现在主攻' : '下一阶段主攻';
-    planNowEl.appendChild(label);
 
     var main = document.createElement('p');
     main.className = 'plan-now-main';
-    main.textContent = focus.main;
+    main.textContent = focus.main || focus.name || '（还没填主攻科目）';
+
+    planNowEl.appendChild(label);
     planNowEl.appendChild(main);
 
     if (focus.secondary) {
@@ -950,69 +1264,65 @@ function renderPlanNow() {
       planNowEl.appendChild(sub);
     }
 
-    var left = daysBetween(today, focus.exam.date);
-    var cd = document.createElement('p');
-    cd.className = 'plan-countdown';
+    if (focus.examName && focus.examDate) {
+      var left = daysBetween(today, focus.examDate);
+      var cd = document.createElement('p');
+      cd.className = 'plan-countdown';
 
-    if (left > 0) {
-      // 不用 createTextNode：测试夹具没有它，用 span 承载纯文本更省事
-      var prefix = document.createElement('span');
-      prefix.textContent = '距「' + focus.exam.name + '」还有 ';
-      var num = document.createElement('strong');
-      num.textContent = String(left);
-      var suffix = document.createElement('span');
-      suffix.textContent = ' 天';
-      cd.appendChild(prefix);
-      cd.appendChild(num);
-      cd.appendChild(suffix);
-      if (left <= 3) cd.classList.add('is-urgent');
-      else if (left <= 7) cd.classList.add('is-soon');
-    } else if (left === 0) {
-      cd.textContent = '今天就是「' + focus.exam.name + '」';
-      cd.classList.add('is-urgent');
-    } else {
-      cd.textContent = '「' + focus.exam.name + '」已结束';
+      if (left > 0) {
+        // 不用 createTextNode：测试夹具没有它，用 span 承载纯文本更省事
+        var prefix = document.createElement('span');
+        prefix.textContent = '距「' + focus.examName + '」还有 ';
+        var num = document.createElement('strong');
+        num.textContent = String(left);
+        var suffix = document.createElement('span');
+        suffix.textContent = ' 天';
+        cd.appendChild(prefix);
+        cd.appendChild(num);
+        cd.appendChild(suffix);
+        if (left <= 3) cd.classList.add('is-urgent');
+        else if (left <= 7) cd.classList.add('is-soon');
+      } else if (left === 0) {
+        cd.textContent = '今天就是「' + focus.examName + '」';
+        cd.classList.add('is-urgent');
+      } else {
+        cd.textContent = '「' + focus.examName + '」已结束';
+      }
+      planNowEl.appendChild(cd);
     }
-    planNowEl.appendChild(cd);
   } else {
-    var allDone = document.createElement('p');
-    allDone.className = 'plan-now-done';
-    allDone.textContent = '课内考试都考完了，接下来专心六级。';
-    planNowEl.appendChild(allDone);
+    var none = document.createElement('p');
+    none.className = 'plan-now-done';
+    none.textContent = list.length ? '阶段都过完了，下一段还没排' : '还没排阶段计划，点下面「编辑」加一段';
+    planNowEl.appendChild(none);
   }
 
-  // 六级：第二条轨道，同时进行，单独一行
-  var cet = plan.cet;
-  if (cet && cet.stages) {
-    var stage = null;
-    for (var j = 0; j < cet.stages.length; j++) {
-      if (today >= cet.stages[j].start && today <= cet.stages[j].end) {
-        stage = cet.stages[j];
-        break;
-      }
-    }
-    var cetLeft = daysBetween(today, cet.examDate);
-    var line = document.createElement('p');
-    line.className = 'plan-cet-now';
+  var cetExam = state.plan.cetExam;
+  if (cetExam && cetExam.date) {
+    var cetLeft = daysBetween(today, cetExam.date);
     if (cetLeft >= 0) {
-      line.textContent = cet.name +
-        (stage ? ' · ' + stage.label + '：' + stage.focus : '') +
+      var cetStage = activePhase(today, 'cet');
+      var line = document.createElement('p');
+      line.className = 'plan-cet-now';
+      line.textContent = (cetExam.name || '六级') +
+        (cetStage ? ' · ' + cetStage.name + (cetStage.main ? '：' + cetStage.main : '') : '') +
         ' · 还有 ' + cetLeft + ' 天';
       planNowEl.appendChild(line);
     }
   }
 }
 
+/* ---------- 渲染：阶段计划 / 六级 ---------- */
+
 function renderPhaseList() {
   if (!phaseListEl) return;
-  var plan = window.STUDY_PLAN;
-  if (!plan || !plan.courses) return;
-
-  var today = todayStr();
   phaseListEl.textContent = '';
 
-  for (var i = 0; i < plan.courses.length; i++) {
-    var p = plan.courses[i];
+  var today = todayStr();
+  var list = planPhases('course');
+
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i];
     var st = phaseStatus(p, today);
 
     var li = document.createElement('li');
@@ -1023,7 +1333,7 @@ function renderPhaseList() {
 
     var name = document.createElement('span');
     name.className = 'phase-name';
-    name.textContent = p.name;
+    name.textContent = p.name || '（未命名阶段）';
 
     var badge = document.createElement('span');
     badge.className = 'phase-badge';
@@ -1034,67 +1344,248 @@ function renderPhaseList() {
 
     var range = document.createElement('p');
     range.className = 'phase-range';
-    range.textContent = shortDate(p.start) + ' – ' + shortDate(p.end) +
-      ' · 共 ' + (daysBetween(p.start, p.end) + 1) + ' 天';
+    if (p.start && p.end) {
+      range.textContent = shortDate(p.start) + ' – ' + shortDate(p.end) +
+        ' · 共 ' + (daysBetween(p.start, p.end) + 1) + ' 天';
+    } else {
+      range.textContent = '还没填日期';
+    }
 
     var subj = document.createElement('p');
     subj.className = 'phase-subjects';
-    subj.textContent = '主：' + p.main + (p.secondary ? ' · 次：' + p.secondary : '');
+    subj.textContent = '主：' + (p.main || '—') + (p.secondary ? ' · 次：' + p.secondary : '');
 
     li.appendChild(head);
     li.appendChild(range);
     li.appendChild(subj);
 
-    if (p.note) {
-      var note = document.createElement('p');
-      note.className = 'phase-note';
-      note.textContent = p.note;
-      li.appendChild(note);
+    if (p.examName && p.examDate) {
+      var exam = document.createElement('p');
+      exam.className = 'phase-note';
+      exam.textContent = p.examName + ' · ' + shortDate(p.examDate);
+      li.appendChild(exam);
     }
 
     phaseListEl.appendChild(li);
+  }
+
+  if (!list.length) {
+    var empty = document.createElement('li');
+    empty.className = 'phase-item';
+    empty.textContent = '还没有课内阶段，点下面「编辑阶段」加一段';
+    phaseListEl.appendChild(empty);
   }
 }
 
 function renderCetList() {
   if (!cetListEl) return;
-  var plan = window.STUDY_PLAN;
-  if (!plan || !plan.cet || !plan.cet.stages) return;
-
-  var today = todayStr();
   cetListEl.textContent = '';
 
-  for (var i = 0; i < plan.cet.stages.length; i++) {
-    var s = plan.cet.stages[i];
-    var active = today >= s.start && today <= s.end;
+  var today = todayStr();
+  var list = planPhases('cet');
+
+  for (var i = 0; i < list.length; i++) {
+    var s = list[i];
+    var isActive = s.start && s.end && today >= s.start && today <= s.end;
 
     var li = document.createElement('li');
-    li.className = 'cet-item' + (active ? ' is-active' : '');
+    li.className = 'cet-item' + (isActive ? ' is-active' : '');
 
     var label = document.createElement('span');
     label.className = 'cet-label';
-    label.textContent = s.label;
+    label.textContent = s.name || '（未命名）';
 
     var focus = document.createElement('span');
     focus.className = 'cet-focus';
-    focus.textContent = s.focus;
+    focus.textContent = s.main || '—';
 
     var range = document.createElement('span');
     range.className = 'cet-range';
-    range.textContent = shortDate(s.start) + '–' + shortDate(s.end);
+    range.textContent = s.start && s.end ? shortDate(s.start) + '–' + shortDate(s.end) : '';
 
     li.appendChild(label);
     li.appendChild(focus);
     li.appendChild(range);
     cetListEl.appendChild(li);
   }
+
+  if (!list.length) {
+    var empty = document.createElement('li');
+    empty.className = 'cet-item';
+    empty.textContent = '还没有六级阶段';
+    cetListEl.appendChild(empty);
+  }
+}
+
+/* ---------- 渲染：管理面板 ---------- */
+
+function makeInput(type, value, label, onChange) {
+  var el = document.createElement('input');
+  el.type = type;
+  el.className = 'editor-input';
+  el.value = value || '';
+  el.setAttribute('aria-label', label);
+  el.addEventListener('change', function () { onChange(el.value); });
+  return el;
+}
+
+function makeSelect(options, values, current, label, onChange) {
+  var el = document.createElement('select');
+  el.className = 'editor-select';
+  el.setAttribute('aria-label', label);
+
+  for (var i = 0; i < options.length; i++) {
+    var opt = document.createElement('option');
+    opt.value = values[i];
+    opt.textContent = options[i];
+    if (values[i] === current) opt.selected = true;
+    el.appendChild(opt);
+  }
+  el.addEventListener('change', function () { onChange(el.value); });
+  return el;
+}
+
+function makeDelButton(label, onClick) {
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'editor-del';
+  btn.textContent = '×';
+  btn.setAttribute('aria-label', label);
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function buildTaskRow(task) {
+  var row = document.createElement('div');
+  row.className = 'editor-row';
+  row.setAttribute('data-id', task.id);
+
+  var nameInput = makeInput('text', task.name, '清单项名称', function (v) {
+    renameTask(task.id, v);
+  });
+  nameInput.maxLength = MAX_TITLE_LEN;
+
+  var groupSel = makeSelect(
+    ['当前阶段', '每日固定', '我的计划'],
+    ['phase', 'daily', 'mine'],
+    task.group,
+    '这一项属于哪个组',
+    function (v) { moveTask(task.id, v); }
+  );
+
+  row.appendChild(nameInput);
+  row.appendChild(groupSel);
+  row.appendChild(makeDelButton('删除：' + task.name, function () { removeTask(task.id); }));
+  return row;
+}
+
+function renderTaskEditor() {
+  if (!taskEditorListEl) return;
+  taskEditorListEl.textContent = '';
+
+  var tasks = (state.plan && state.plan.tasks) || [];
+  for (var i = 0; i < tasks.length; i++) {
+    taskEditorListEl.appendChild(buildTaskRow(tasks[i]));
+  }
+
+  if (!tasks.length) {
+    var empty = document.createElement('p');
+    empty.className = 'editor-empty';
+    empty.textContent = '清单是空的，用下面的输入框加一条';
+    taskEditorListEl.appendChild(empty);
+  }
+}
+
+function buildPhaseRow(p) {
+  var row = document.createElement('div');
+  row.className = 'phase-edit-row';
+  row.setAttribute('data-id', p.id);
+
+  var head = document.createElement('div');
+  head.className = 'editor-row';
+
+  var nameInput = makeInput('text', p.name, '阶段名称', function (v) {
+    updatePhase(p.id, 'name', v);
+  });
+  nameInput.maxLength = MAX_PHASE_NAME_LEN;
+  nameInput.className = 'editor-input editor-input-wide';
+
+  var trackSel = makeSelect(['课内', '六级'], ['course', 'cet'], p.track, '阶段类型',
+    function (v) { updatePhase(p.id, 'track', v); });
+
+  head.appendChild(nameInput);
+  head.appendChild(trackSel);
+  head.appendChild(makeDelButton('删除阶段：' + (p.name || ''), function () { deletePhase(p.id); }));
+
+  var dates = document.createElement('div');
+  dates.className = 'editor-row';
+  dates.appendChild(labelText('开始'));
+  dates.appendChild(makeInput('date', p.start, '阶段开始日期', function (v) { updatePhase(p.id, 'start', v); }));
+  dates.appendChild(labelText('结束'));
+  dates.appendChild(makeInput('date', p.end, '阶段结束日期', function (v) { updatePhase(p.id, 'end', v); }));
+
+  var subjects = document.createElement('div');
+  subjects.className = 'editor-row';
+  subjects.appendChild(labelText('主攻'));
+  subjects.appendChild(makeInput('text', p.main, '主攻科目', function (v) { updatePhase(p.id, 'main', v); }));
+  subjects.appendChild(labelText('次'));
+  subjects.appendChild(makeInput('text', p.secondary, '次要科目（可空）', function (v) { updatePhase(p.id, 'secondary', v); }));
+
+  row.appendChild(head);
+  row.appendChild(dates);
+  row.appendChild(subjects);
+
+  if (p.track === 'course') {
+    var exam = document.createElement('div');
+    exam.className = 'editor-row';
+    exam.appendChild(labelText('考试'));
+    exam.appendChild(makeInput('text', p.examName, '考试名称（可空）', function (v) { updatePhase(p.id, 'examName', v); }));
+    exam.appendChild(makeInput('date', p.examDate, '考试日期（可空）', function (v) { updatePhase(p.id, 'examDate', v); }));
+    row.appendChild(exam);
+  }
+
+  return row;
+}
+
+function labelText(text) {
+  var el = document.createElement('span');
+  el.className = 'editor-label';
+  el.textContent = text;
+  return el;
+}
+
+function renderPhaseEditor() {
+  if (!phaseEditorListEl) return;
+  phaseEditorListEl.textContent = '';
+
+  var list = (state.plan && state.plan.phases) || [];
+  for (var i = 0; i < list.length; i++) {
+    phaseEditorListEl.appendChild(buildPhaseRow(list[i]));
+  }
+
+  if (!list.length) {
+    var empty = document.createElement('p');
+    empty.className = 'editor-empty';
+    empty.textContent = '还没有阶段，下面加一段';
+    phaseEditorListEl.appendChild(empty);
+  }
+
+  if (cetExamNameEl && state.plan && state.plan.cetExam) {
+    cetExamNameEl.value = state.plan.cetExam.name || '';
+  }
+  if (cetExamDateEl && state.plan && state.plan.cetExam) {
+    cetExamDateEl.value = state.plan.cetExam.date || '';
+  }
 }
 
 function renderPlan() {
+  if (!state.plan) return;
   renderPlanNow();
   renderDailyList();
   renderPhaseList();
   renderCetList();
+  renderTaskEditor();
+  renderPhaseEditor();
 }
 
 /* ---------- 渲染 ---------- */
@@ -1486,11 +1977,10 @@ function exportData() {
     // Day 29：待办也一起导出，免得误以为备份了全部数据
     todoTotal: state.todos.length,
     todos: state.todos,
-    // Day 31：计划打卡 + 自定义计划项，同理
-    plan: {
-      dailyLog: state.dailyLog,
-      customPlans: state.customPlans,
-    },
+    // Day 31 / v1.5.0：计划全量导出（含阶段、清单项、打卡记录），
+    // 这样导出的文件才是真的能还原的备份
+    plan: state.plan,
+    planLog: state.dailyLog,
   };
   var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
@@ -1546,7 +2036,7 @@ if (todoListEl) {
   });
 }
 
-/* ---------- Day 30/31：今日清单事件 ---------- */
+/* ---------- v1.5.0：今日清单 / 管理面板事件 ---------- */
 
 if (dailyListEl) {
   // 整个 li 都是点击目标（手机上点小方块太费劲）
@@ -1555,15 +2045,6 @@ if (dailyListEl) {
     if (!target || !target.closest) return;
     var li = target.closest('.daily-item');
     if (!li) return;
-
-    // Day 31：× 是删项，不能顺手把这条也勾上
-    if (target.classList && target.classList.contains('daily-del')) {
-      if (window.confirm('删除这一项计划？过去几天的打卡记录会保留。')) {
-        deleteCustomPlan(li.dataset.id);
-      }
-      return;
-    }
-
     toggleDaily(li.dataset.key);
   });
 
@@ -1572,8 +2053,6 @@ if (dailyListEl) {
     if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
     var target = event.target;
     if (!target || !target.closest) return;
-    // 焦点在删除按钮上时交给浏览器，否则会既删又勾
-    if (target.classList && target.classList.contains('daily-del')) return;
     var li = target.closest('.daily-item');
     if (!li) return;
     event.preventDefault();
@@ -1581,17 +2060,64 @@ if (dailyListEl) {
   });
 }
 
-// Day 31：加一项自己的计划
+// 加一项：可以选加进哪个组
 if (planAddFormEl) {
   planAddFormEl.addEventListener('submit', function (event) {
     event.preventDefault();
-    var result = addCustomPlan(planAddInputEl ? planAddInputEl.value : '');
+    var group = planAddGroupEl ? planAddGroupEl.value : 'mine';
+    var result = addTask(planAddInputEl ? planAddInputEl.value : '', group);
     if (result.ok) {
       if (planAddInputEl) planAddInputEl.value = '';
       showHint('');
     } else if (result.message) {
       showHint(result.message);
     }
+  });
+}
+
+// 展开 / 收起管理面板
+if (taskEditBtnEl) {
+  taskEditBtnEl.addEventListener('click', function () {
+    state.editing = !state.editing;
+    if (taskEditorEl) taskEditorEl.hidden = !state.editing;
+    taskEditBtnEl.textContent = state.editing ? '收起' : '管理';
+    taskEditBtnEl.setAttribute('aria-expanded', state.editing ? 'true' : 'false');
+    if (state.editing) renderTaskEditor();
+  });
+}
+
+if (phaseEditBtnEl) {
+  phaseEditBtnEl.addEventListener('click', function () {
+    if (!phaseEditorEl) return;
+    phaseEditorEl.hidden = !phaseEditorEl.hidden;
+    phaseEditBtnEl.textContent = phaseEditorEl.hidden ? '编辑阶段' : '收起';
+  });
+}
+
+if (phaseAddCourseEl) {
+  phaseAddCourseEl.addEventListener('click', function () { addPhase('course'); });
+}
+
+if (phaseAddCetEl) {
+  phaseAddCetEl.addEventListener('click', function () { addPhase('cet'); });
+}
+
+if (planResetEl) {
+  planResetEl.addEventListener('click', function () {
+    var ok = window.confirm('恢复默认计划会覆盖你现在的阶段和清单改动，打卡记录不受影响。继续？');
+    if (ok) resetPlan();
+  });
+}
+
+if (cetExamNameEl) {
+  cetExamNameEl.addEventListener('change', function () {
+    updateCetExam('name', cetExamNameEl.value);
+  });
+}
+
+if (cetExamDateEl) {
+  cetExamDateEl.addEventListener('change', function () {
+    updateCetExam('date', cetExamDateEl.value);
   });
 }
 
@@ -1687,8 +2213,10 @@ function bootstrap() {
   loadTodos();
   // Day 30：今日清单的打卡记录同理
   loadDailyLog();
-  // Day 31：自定义计划项（也是纯本地）
-  loadCustomPlans();
+  // v1.5.0：计划全量数据（没有就用 plan.js 的默认模板，顺便迁移旧自定义项）
+  loadPlan();
+  // 阶段换人了就把这一段的科目同步进清单（同阶段内不会重复插入）
+  syncPhaseTasks(todayStr());
 
   // 底部那句数据来源跟着实际数据源走：本地打开却写着「来自云端」会误导人
   var srcEl = document.getElementById('habit-source');

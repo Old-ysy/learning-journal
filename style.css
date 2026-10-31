@@ -1065,6 +1065,166 @@ a:focus-visible,
   opacity: 0.9;
 }
 
+/* ----- v1.5.0：计划管理面板（清单项 / 阶段都能在页面上改） ----- */
+
+.plan-edit-btn {
+  margin-left: auto;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  align-self: center;
+}
+
+.plan-edit-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.plan-edit-btn-block {
+  display: block;
+  margin: 0.6rem 0 0;
+  width: 100%;
+  text-align: center;
+}
+
+.plan-editor {
+  margin-top: 0.7rem;
+  padding: 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.editor-hint {
+  margin: 0 0 0.55rem;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.editor-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.editor-input,
+.editor-select {
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+}
+
+.editor-input {
+  flex: 1;
+}
+
+.editor-input-wide {
+  flex: 2;
+}
+
+.editor-input:focus,
+.editor-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.editor-label {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.editor-del {
+  flex: 0 0 auto;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.editor-del:hover {
+  color: #fff;
+  background: #d9534f;
+  border-color: #d9534f;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
+.editor-actions .plan-edit-btn {
+  flex: 1;
+  margin-left: 0;
+}
+
+.editor-row-cet {
+  margin-top: 0.55rem;
+}
+
+.plan-reset-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.7rem;
+  padding: 0.45rem 0;
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: var(--muted);
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.plan-reset-btn:hover {
+  color: #d9534f;
+  border-color: #d9534f;
+}
+
+.editor-empty {
+  margin: 0;
+  padding: 0.4rem 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.phase-edit-row {
+  padding: 0.55rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.phase-edit-row .editor-row + .editor-row {
+  margin-top: 0.35rem;
+}
+
 /* ----- 阶段卡片 ----- */
 
 .phase-list,

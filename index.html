@@ -10,7 +10,7 @@
   <main class="app">
 
     <header class="app-header">
-      <h1 class="app-title">今日打卡 <span class="version-badge" id="app-version">v1.4.0</span></h1>
+      <h1 class="app-title">今日打卡 <span class="version-badge" id="app-version">v1.5.0</span></h1>
       <p class="app-date" id="today-date"></p>
     </header>
 
@@ -37,13 +37,13 @@
         <!-- 当前重点 + 倒计时 -->
         <div class="plan-now" id="plan-now"></div>
 
-        <!-- 今日清单：三组统一勾选（当前阶段 / 每日固定 / 我的计划），
-             记录 key=daily-log，不受云端只读边界影响。
-             Day 31 把原来的「每日四件」扩成清单：阶段任务自动跟着日期出现。 -->
+        <!-- 今日清单：三组统一勾选，记录 key=daily-log。
+             v1.5.0 起清单项本身也能改：点「管理」展开改名/换组/删除。 -->
         <div class="plan-block">
           <h2 class="plan-subtitle">
             今日清单
             <span class="daily-count" id="daily-count"></span>
+            <button type="button" class="plan-edit-btn" id="plan-edit-btn" aria-expanded="false" aria-controls="task-editor">管理</button>
           </h2>
           <div class="plan-groups" id="daily-list"></div>
 
@@ -52,18 +52,49 @@
               type="text"
               id="plan-add-input"
               class="plan-add-input"
-              placeholder="加一项自己的计划，比如：复习图论"
+              placeholder="加一项计划…"
               maxlength="20"
-              aria-label="自定义计划内容"
+              aria-label="计划内容"
             />
+            <select id="plan-add-group" class="editor-select" aria-label="加到哪个组">
+              <option value="phase">当前阶段</option>
+              <option value="daily">每日固定</option>
+              <option value="mine" selected>我的计划</option>
+            </select>
             <button type="submit" class="plan-add-btn">加</button>
           </form>
+
+          <!-- 管理面板：清单项改名 / 换组 / 删除，改完立刻生效 -->
+          <div class="plan-editor" id="task-editor" hidden>
+            <p class="editor-hint">直接改名字、换组或删除，改完就生效。删除不会抹掉过去的打卡记录。</p>
+            <div class="editor-list" id="task-editor-list"></div>
+          </div>
         </div>
 
         <!-- 阶段计划：默认折叠，手机上不占第一屏 -->
         <details class="plan-block plan-fold">
           <summary class="plan-subtitle">阶段计划</summary>
           <ol class="phase-list" id="phase-list"></ol>
+
+          <button type="button" class="plan-edit-btn plan-edit-btn-block" id="phase-edit-btn" aria-expanded="false" aria-controls="phase-editor">编辑阶段</button>
+
+          <div class="plan-editor" id="phase-editor" hidden>
+            <p class="editor-hint">阶段决定「现在主攻」和清单里的当前阶段任务。改完立刻重算。</p>
+            <div class="editor-list" id="phase-editor-list"></div>
+
+            <div class="editor-actions">
+              <button type="button" class="plan-edit-btn" id="phase-add-course">+ 课内阶段</button>
+              <button type="button" class="plan-edit-btn" id="phase-add-cet">+ 六级阶段</button>
+            </div>
+
+            <div class="editor-row editor-row-cet">
+              <span class="editor-label">六级考试</span>
+              <input type="text" class="editor-input" id="cet-exam-name" aria-label="六级考试名称" placeholder="六级考试" />
+              <input type="date" class="editor-input" id="cet-exam-date" aria-label="六级考试日期" />
+            </div>
+
+            <button type="button" class="plan-reset-btn" id="plan-reset">恢复默认计划</button>
+          </div>
         </details>
 
         <!-- 六级：贯穿六周的第二条轨道 -->
@@ -193,7 +224,7 @@
         <span class="export-hint">下载当前全部习惯、打卡记录与待办的备份文件</span>
       </p>
       <!-- Day 29：版本记录（详细历史见 CHANGELOG.md） -->
-      <p class="meta-row version-log" id="version-log">版本记录：v1.4.0 · Day 31 今日清单与自定义计划 · v1.3.0 Day 30 学习计划看板 · v1.2.0 Day 29 今日待办</p>
+      <p class="meta-row version-log" id="version-log">版本记录：v1.5.0 计划可编辑 · v1.4.0 自定义清单 · v1.3.0 学习计划看板 · v1.2.0 今日待办</p>
     </footer>
   </main>
 
