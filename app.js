@@ -18,9 +18,15 @@ var TODO_KEY = 'todos';
 var MAX_TODO_TEXT = 50;       // 待办是一句话，比习惯名（20）宽
 var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 
-// Day 30：每日四件的打卡记录（TECH_DESIGN.md 3.3 节）。
+// Day 30：今日清单的打卡记录（TECH_DESIGN.md 3.3 节）。
 // 计划本身写在 plan.js 里不进存储，这里只存「哪天做了」。
 var DAILY_KEY = 'daily-log';
+
+// Day 31：用户自己加的计划项。和 daily-log 分开：一个是「做过没」，
+// 一个是「有哪些项」，删项时不该连历史打卡一起抹掉。
+var CUSTOM_PLAN_KEY = 'custom-plan';
+var MAX_CUSTOM_PLANS = 10;     // 上限：加满 10 条已经不是「计划」是待办了
+var MAX_CUSTOM_LEN = 20;       // 和习惯名同一档，将来服务端校验口径一致
 
 /* ---------- Day 20：数据源 -------------
  * 公网 https 页面 → 从云端拉真实数据
@@ -44,7 +50,8 @@ var API_HABITS =
 var state = {
   habits: [],   // [{ id, name, createdAt, records: ['YYYY-MM-DD', ...] }]
   todos: [],    // Day 29：[{ id, text, dueDate, done, createdAt, completedAt }]
-  dailyLog: {}, // Day 30：{ words: ['2026-10-31', ...], english: [...], ... }
+  dailyLog: {}, // Day 30：{ words: ['2026-10-31', ...], 'course-c1-main': [...], ... }
+  customPlans: [], // Day 31：[{ id, name, createdAt }] 用户自己加的计划项
   filter: ''    // 筛选只作用于显示，不持久化（SKILL.md 规则 1）
 };
 
@@ -95,6 +102,9 @@ var todoAlertTimer = null;
 var planNowEl = document.getElementById('plan-now');
 var dailyListEl = document.getElementById('daily-list');
 var dailyCountEl = document.getElementById('daily-count');
+// Day 31：自定义计划输入（夹具里可能没有这两个节点，用判空保护）
+var planAddFormEl = document.getElementById('plan-add-form');
+var planAddInputEl = document.getElementById('plan-add-input');
 var phaseListEl = document.getElementById('phase-list');
 var cetListEl = document.getElementById('cet-list');
 
@@ -623,6 +633,87 @@ function saveDailyLog() {
   }
 }
 
+/* ---------- Day 31：自定义计划项 ---------- */
+
+function loadCustomPlans() {
+  state.customPlans = [];
+  try {
+    var raw = localStorage.getItem(CUSTOM_PLAN_KEY);
+    if (!raw) return;
+    var parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    // 逐条筛：坏数据丢掉整条，不能因为一条脏数据让整个清单独不出来
+    for (var i = 0; i < parsed.length; i++) {
+      var it = parsed[i];
+      if (it && typeof it.id === 'string' && typeof it.name === 'string' && it.name) {
+        state.customPlans.push({ id: it.id, name: it.name, createdAt: it.createdAt || 0 });
+      }
+    }
+  } catch (err) {
+    console.error('自定义计划读取失败，按空处理：', err);
+    state.customPlans = [];
+  }
+}
+
+function saveCustomPlans() {
+  try {
+    localStorage.setItem(CUSTOM_PLAN_KEY, JSON.stringify(state.customPlans));
+    return true;
+  } catch (err) {
+    console.error('自定义计划写入失败：', err);
+    return false;
+  }
+}
+
+/** 自定义项的打卡 key。id 里带 cp_ 前缀，拼出来的 key 一眼能认出是用户加的 */
+function customKey(id) {
+  return 'custom-' + id;
+}
+
+function addCustomPlan(text) {
+  var name = String(text == null ? '' : text).trim();
+
+  if (!name) return { ok: false, message: '写点什么再加（1–20 字）' };
+  // 中文按 1 个字算：Array.from 走的是码点，emoji 也不会被算成 2 个
+  var len = Array.from(name).length;
+  if (len > MAX_CUSTOM_LEN) {
+    return { ok: false, message: '最多 ' + MAX_CUSTOM_LEN + ' 个字，现在 ' + len + ' 个' };
+  }
+  if (state.customPlans.length >= MAX_CUSTOM_PLANS) {
+    return { ok: false, message: '最多 ' + MAX_CUSTOM_PLANS + ' 项，先删几条吧' };
+  }
+  for (var i = 0; i < state.customPlans.length; i++) {
+    if (state.customPlans[i].name === name) {
+      return { ok: false, message: '「' + name + '」已经在清单里了' };
+    }
+  }
+
+  state.customPlans.push({
+    // 随机尾巴防同毫秒撞车；不用数组下标——删中间一条后下标前移，
+    // 历史记录（custom-<id>）会错误地挂到别的项上
+    id: 'cp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: name,
+    createdAt: Date.now(),
+  });
+  saveCustomPlans();
+  renderDailyList();
+  return { ok: true };
+}
+
+function deleteCustomPlan(id) {
+  var before = state.customPlans.length;
+  state.customPlans = state.customPlans.filter(function (item) {
+    return item.id !== id;
+  });
+  if (state.customPlans.length === before) return;
+
+  saveCustomPlans();
+
+  // daily-log 里 custom-<id> 的历史留着不删：那天做过是事实，
+  // 不因为今天不想看了就被抹掉（TECH_DESIGN.md 3.3）
+  renderDailyList();
+}
+
 function isDailyDone(key, day) {
   var rec = state.dailyLog[key];
   return Array.isArray(rec) && rec.indexOf(day) !== -1;
@@ -665,48 +756,162 @@ function phaseStatus(phase, today) {
   return 'active';
 }
 
-function renderDailyList() {
-  if (!dailyListEl) return;
+/** 今天落在哪段课内阶段里（全考完之后返回 null） */
+function activeCourse(today) {
   var plan = window.STUDY_PLAN;
-  if (!plan || !plan.daily) return;
+  if (!plan || !plan.courses) return null;
+  for (var i = 0; i < plan.courses.length; i++) {
+    if (today >= plan.courses[i].start && today <= plan.courses[i].end) return plan.courses[i];
+  }
+  return null;
+}
 
-  var today = todayStr();
-  var done = 0;
-  dailyListEl.textContent = '';
+/** 今天落在六级哪一段，返回 { index, stage }；不在任何一段就 null */
+function activeCetStage(today) {
+  var plan = window.STUDY_PLAN;
+  if (!plan || !plan.cet || !plan.cet.stages) return null;
+  for (var i = 0; i < plan.cet.stages.length; i++) {
+    var s = plan.cet.stages[i];
+    if (today >= s.start && today <= s.end) return { index: i, stage: s };
+  }
+  return null;
+}
 
-  for (var i = 0; i < plan.daily.length; i++) {
-    var item = plan.daily[i];
-    var checked = isDailyDone(item.key, today);
-    if (checked) done++;
+/**
+ * 今日清单的全部条目，按组返回。
+ * 顺序：当前阶段 → 每日固定 → 我的计划。
+ * 阶段组排最前：它每天跟着日期变，也是最该先看的；四件天天一样，放后面。
+ * 空组不返回，渲染时就不会留一个光秃秃的标题。
+ */
+function buildPlanGroups(today) {
+  var plan = window.STUDY_PLAN || {};
+  var groups = [];
 
-    var li = document.createElement('li');
-    li.className = 'daily-item' + (checked ? ' is-done' : '');
-    li.setAttribute('data-key', item.key);
-    li.setAttribute('role', 'checkbox');
-    li.setAttribute('tabindex', '0');
-    li.setAttribute('aria-checked', checked ? 'true' : 'false');
-    li.setAttribute('aria-label', (checked ? '取消' : '勾选') + '：' + item.name);
+  // 组 1：当前阶段的任务。key 里带阶段 id，换阶段就是新的一组记录，
+  // 旧记录留在 daily-log 里不删（TECH_DESIGN.md 3.3）
+  var stageItems = [];
+  var course = activeCourse(today);
+  if (course) {
+    // 名字保持原样，主/次用一个小标签表示：手机上两列格子塞不下「（保持手感）」
+    stageItems.push({ key: 'course-' + course.id + '-main', name: course.main, tag: '主' });
+    if (course.secondary) {
+      stageItems.push({ key: 'course-' + course.id + '-sec', name: course.secondary, tag: '次' });
+    }
+  }
+  var cet = activeCetStage(today);
+  if (cet) {
+    stageItems.push({
+      key: 'cet-' + cet.index,
+      name: cet.stage.focus ? '六级 · ' + cet.stage.focus : '六级',
+    });
+  }
+  if (stageItems.length) groups.push({ label: '当前阶段', items: stageItems });
 
-    var mark = document.createElement('span');
-    mark.className = 'daily-mark';
-    mark.textContent = checked ? '✓' : '';
+  // 组 2：plan.js 里的固定四件，原样搬过来
+  var dailyItems = [];
+  var daily = plan.daily || [];
+  for (var i = 0; i < daily.length; i++) {
+    dailyItems.push({ key: daily[i].key, name: daily[i].name });
+  }
+  if (dailyItems.length) groups.push({ label: '每日固定', items: dailyItems });
 
-    var name = document.createElement('span');
-    name.className = 'daily-name';
-    name.textContent = item.name;
+  // 组 3：用户自己加的
+  var mine = [];
+  for (var j = 0; j < state.customPlans.length; j++) {
+    var cp = state.customPlans[j];
+    mine.push({ key: customKey(cp.id), name: cp.name, customId: cp.id });
+  }
+  if (mine.length) groups.push({ label: '我的计划', items: mine });
 
-    var meta = document.createElement('span');
-    meta.className = 'daily-streak';
-    var s = dailyStreak(item.key);
-    meta.textContent = s > 1 ? '连续 ' + s + ' 天' : '';
+  return groups;
+}
 
-    li.appendChild(mark);
-    li.appendChild(name);
-    li.appendChild(meta);
-    dailyListEl.appendChild(li);
+function buildDailyItem(item, today) {
+  var checked = isDailyDone(item.key, today);
+
+  var li = document.createElement('li');
+  li.className = 'daily-item' + (checked ? ' is-done' : '');
+  li.setAttribute('data-key', item.key);
+  li.setAttribute('role', 'checkbox');
+  li.setAttribute('tabindex', '0');
+  li.setAttribute('aria-checked', checked ? 'true' : 'false');
+  li.setAttribute('aria-label', (checked ? '取消' : '勾选') + '：' + item.name);
+
+  var mark = document.createElement('span');
+  mark.className = 'daily-mark';
+  mark.textContent = checked ? '✓' : '';
+
+  var name = document.createElement('span');
+  name.className = 'daily-name';
+  name.textContent = item.name;
+  // 长名字（六级那段「刷真题 + 积累词汇短语句型」）靠 CSS 截断，hover 看全文
+  name.title = item.name;
+
+  var meta = document.createElement('span');
+  meta.className = 'daily-streak';
+  var s = dailyStreak(item.key);
+  meta.textContent = s > 1 ? '连续 ' + s + ' 天' : '';
+
+  li.appendChild(mark);
+  li.appendChild(name);
+
+  if (item.tag) {
+    var tag = document.createElement('span');
+    tag.className = 'daily-tag';
+    tag.textContent = item.tag;
+    li.appendChild(tag);
   }
 
-  if (dailyCountEl) dailyCountEl.textContent = done + '/' + plan.daily.length;
+  li.appendChild(meta);
+
+  // 自定义项才给删除按钮：固定四件和阶段任务是计划里定死的，删了没意义
+  if (item.customId) {
+    li.dataset.id = item.customId;
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'daily-del';
+    del.setAttribute('aria-label', '删除计划项：' + item.name);
+    del.textContent = '×';
+    li.appendChild(del);
+  }
+
+  return li;
+}
+
+function renderDailyList() {
+  if (!dailyListEl) return;
+
+  var today = todayStr();
+  var groups = buildPlanGroups(today);
+
+  var done = 0;
+  var total = 0;
+  dailyListEl.textContent = '';
+
+  for (var i = 0; i < groups.length; i++) {
+    var box = document.createElement('div');
+    box.className = 'daily-group';
+
+    var label = document.createElement('p');
+    label.className = 'daily-group-label';
+    label.textContent = groups[i].label;
+    box.appendChild(label);
+
+    var ul = document.createElement('ul');
+    ul.className = 'daily-list';
+
+    for (var j = 0; j < groups[i].items.length; j++) {
+      var item = groups[i].items[j];
+      total++;
+      if (isDailyDone(item.key, today)) done++;
+      ul.appendChild(buildDailyItem(item, today));
+    }
+
+    box.appendChild(ul);
+    dailyListEl.appendChild(box);
+  }
+
+  if (dailyCountEl) dailyCountEl.textContent = done + '/' + total;
 }
 
 function renderPlanNow() {
@@ -1281,6 +1486,11 @@ function exportData() {
     // Day 29：待办也一起导出，免得误以为备份了全部数据
     todoTotal: state.todos.length,
     todos: state.todos,
+    // Day 31：计划打卡 + 自定义计划项，同理
+    plan: {
+      dailyLog: state.dailyLog,
+      customPlans: state.customPlans,
+    },
   };
   var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
@@ -1336,7 +1546,7 @@ if (todoListEl) {
   });
 }
 
-/* ---------- Day 30：每日四件事件 ---------- */
+/* ---------- Day 30/31：今日清单事件 ---------- */
 
 if (dailyListEl) {
   // 整个 li 都是点击目标（手机上点小方块太费劲）
@@ -1345,6 +1555,15 @@ if (dailyListEl) {
     if (!target || !target.closest) return;
     var li = target.closest('.daily-item');
     if (!li) return;
+
+    // Day 31：× 是删项，不能顺手把这条也勾上
+    if (target.classList && target.classList.contains('daily-del')) {
+      if (window.confirm('删除这一项计划？过去几天的打卡记录会保留。')) {
+        deleteCustomPlan(li.dataset.id);
+      }
+      return;
+    }
+
     toggleDaily(li.dataset.key);
   });
 
@@ -1353,10 +1572,26 @@ if (dailyListEl) {
     if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
     var target = event.target;
     if (!target || !target.closest) return;
+    // 焦点在删除按钮上时交给浏览器，否则会既删又勾
+    if (target.classList && target.classList.contains('daily-del')) return;
     var li = target.closest('.daily-item');
     if (!li) return;
     event.preventDefault();
     toggleDaily(li.dataset.key);
+  });
+}
+
+// Day 31：加一项自己的计划
+if (planAddFormEl) {
+  planAddFormEl.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var result = addCustomPlan(planAddInputEl ? planAddInputEl.value : '');
+    if (result.ok) {
+      if (planAddInputEl) planAddInputEl.value = '';
+      showHint('');
+    } else if (result.message) {
+      showHint(result.message);
+    }
   });
 }
 
@@ -1450,8 +1685,10 @@ function loadFromCloud() {
 function bootstrap() {
   // Day 29：待办先读（纯本地），和习惯的数据源互不阻塞
   loadTodos();
-  // Day 30：每日四件的打卡记录同理
+  // Day 30：今日清单的打卡记录同理
   loadDailyLog();
+  // Day 31：自定义计划项（也是纯本地）
+  loadCustomPlans();
 
   // 底部那句数据来源跟着实际数据源走：本地打开却写着「来自云端」会误导人
   var srcEl = document.getElementById('habit-source');

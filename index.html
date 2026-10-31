@@ -10,7 +10,7 @@
   <main class="app">
 
     <header class="app-header">
-      <h1 class="app-title">今日打卡 <span class="version-badge" id="app-version">v1.3.0</span></h1>
+      <h1 class="app-title">今日打卡 <span class="version-badge" id="app-version">v1.4.0</span></h1>
       <p class="app-date" id="today-date"></p>
     </header>
 
@@ -37,13 +37,27 @@
         <!-- 当前重点 + 倒计时 -->
         <div class="plan-now" id="plan-now"></div>
 
-        <!-- 每日四件：独立打卡，key=daily-log，不受云端只读边界影响 -->
+        <!-- 今日清单：三组统一勾选（当前阶段 / 每日固定 / 我的计划），
+             记录 key=daily-log，不受云端只读边界影响。
+             Day 31 把原来的「每日四件」扩成清单：阶段任务自动跟着日期出现。 -->
         <div class="plan-block">
           <h2 class="plan-subtitle">
-            每日四件
+            今日清单
             <span class="daily-count" id="daily-count"></span>
           </h2>
-          <ul class="daily-list" id="daily-list"></ul>
+          <div class="plan-groups" id="daily-list"></div>
+
+          <form class="plan-add-form" id="plan-add-form" autocomplete="off">
+            <input
+              type="text"
+              id="plan-add-input"
+              class="plan-add-input"
+              placeholder="加一项自己的计划，比如：复习图论"
+              maxlength="20"
+              aria-label="自定义计划内容"
+            />
+            <button type="submit" class="plan-add-btn">加</button>
+          </form>
         </div>
 
         <!-- 阶段计划：默认折叠，手机上不占第一屏 -->
@@ -179,7 +193,7 @@
         <span class="export-hint">下载当前全部习惯、打卡记录与待办的备份文件</span>
       </p>
       <!-- Day 29：版本记录（详细历史见 CHANGELOG.md） -->
-      <p class="meta-row version-log" id="version-log">版本记录：v1.3.0 · Day 30 学习计划看板 · v1.2.0 Day 29 今日待办</p>
+      <p class="meta-row version-log" id="version-log">版本记录：v1.4.0 · Day 31 今日清单与自定义计划 · v1.3.0 Day 30 学习计划看板 · v1.2.0 Day 29 今日待办</p>
     </footer>
   </main>
 

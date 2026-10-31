@@ -441,6 +441,8 @@ a:focus-visible,
 .crumb-back:focus-visible,
 .view-tab:focus-visible,
 .daily-item:focus-visible,
+.daily-del:focus-visible,
+.plan-add-btn:focus-visible,
 .export-btn:focus-visible,
 .todo-add-btn:focus-visible {
   outline: 2px solid var(--accent);
@@ -951,8 +953,13 @@ a:focus-visible,
 }
 
 .daily-name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 0.88rem;
   color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .daily-item.is-done .daily-name {
@@ -964,6 +971,98 @@ a:focus-visible,
   font-size: 0.68rem;
   color: var(--streak-text);
   white-space: nowrap;
+}
+
+/* ----- Day 31：清单分组 ----- */
+
+.plan-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.daily-group {
+  min-width: 0;
+}
+
+.daily-group-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+/* 主 / 次 小标签：两列格子里塞不下「（保持手感）」这种后缀 */
+.daily-tag {
+  flex: 0 0 auto;
+  padding: 0 0.28rem;
+  font-size: 0.62rem;
+  line-height: 1.6;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 3px;
+}
+
+/* 自定义项的删除按钮：做小一点，不抢勾选的主位 */
+.daily-del {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.daily-del:hover {
+  color: var(--danger);
+  background: var(--warn-bg);
+}
+
+/* 加一项自己的计划 */
+.plan-add-form {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.plan-add-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+}
+
+.plan-add-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.plan-add-btn {
+  flex: 0 0 auto;
+  padding: 0 0.9rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.plan-add-btn:hover {
+  opacity: 0.9;
 }
 
 /* ----- 阶段卡片 ----- */
@@ -1081,6 +1180,11 @@ a:focus-visible,
   }
   .daily-item {
     padding: 0.5rem 0.55rem;
+  }
+  /* 窄屏两列本来就挤，长计划名允许换行，别在手机上截成「六级 · 刷真…」 */
+  .daily-name {
+    white-space: normal;
+    line-height: 1.35;
   }
   .cet-item {
     flex-wrap: wrap;
