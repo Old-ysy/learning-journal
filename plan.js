@@ -19,7 +19,7 @@
 'use strict';
 
 var DEFAULT_PLAN = {
-  version: 2,
+  version: 3,
   updatedAt: '2026-10-31',
 
   phases: [
@@ -27,7 +27,7 @@ var DEFAULT_PLAN = {
       id: 'c1',
       track: 'course',
       name: '数字逻辑冲刺',
-      start: '2026-10-31',
+      start: '2026-11-01',
       end: '2026-11-11',
       main: '数字逻辑',
       secondary: '离散数学',
@@ -61,8 +61,8 @@ var DEFAULT_PLAN = {
       id: '0',
       track: 'cet',
       name: '第 1 周',
-      start: '2026-10-31',
-      end: '2026-11-06',
+      start: '2026-11-02',
+      end: '2026-11-08',
       main: '阅读',
       secondary: '',
       examName: '',
@@ -72,8 +72,8 @@ var DEFAULT_PLAN = {
       id: '1',
       track: 'cet',
       name: '第 2–3 周',
-      start: '2026-11-07',
-      end: '2026-11-20',
+      start: '2026-11-09',
+      end: '2026-11-22',
       main: '翻译 + 作文',
       secondary: '',
       examName: '',
@@ -83,7 +83,7 @@ var DEFAULT_PLAN = {
       id: '2',
       track: 'cet',
       name: '第 4–6 周',
-      start: '2026-11-21',
+      start: '2026-11-23',
       end: '2026-12-12',
       main: '刷真题 + 积累词汇短语句型',
       secondary: '',

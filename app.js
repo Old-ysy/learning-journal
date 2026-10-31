@@ -897,7 +897,7 @@ function blankPlan() {
   var seed = clonePlan(window.DEFAULT_PLAN || { phases: [], tasks: [] });
   if (!Array.isArray(seed.phases)) seed.phases = [];
   if (!Array.isArray(seed.tasks)) seed.tasks = [];
-  seed.version = 2;
+  seed.version = 3;
   seed.bound = { course: '', cet: '' };
   return seed;
 }
@@ -910,7 +910,8 @@ function sanitizePlan(raw) {
   if (!raw || typeof raw !== 'object') return null;
 
   var out = {
-    version: 2,
+    // version 保留原值：低于 3 的还要走一次日期校准（migratePhaseDates）
+    version: typeof raw.version === 'number' ? raw.version : 2,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : '',
     phases: [],
     tasks: [],
@@ -959,6 +960,53 @@ function sanitizePlan(raw) {
   return out;
 }
 
+/**
+ * v1.6.1：出厂模板的日期整体往后挪了一次
+ *   - 课内阶段一：10/31 → 11/01 开始
+ *   - 六级三段：10/31 起 → 11/02（周一）起，每段按周对齐
+ *
+ * 老用户浏览器里已经有一份 plan-data，光改 plan.js 是不会生效的。
+ * 所以这里做一次校准，但**只动跟旧出厂值一模一样的阶段** —— 用户自己改过的日期一律不碰。
+ */
+var LEGACY_PHASE_DATES = {
+  c1: ['2026-10-31', '2026-11-11'],
+  c2: ['2026-11-12', '2026-11-18'],
+  c3: ['2026-11-19', '2026-11-21'],
+  '0': ['2026-10-31', '2026-11-06'],
+  '1': ['2026-11-07', '2026-11-20'],
+  '2': ['2026-11-21', '2026-12-12']
+};
+
+function migratePhaseDates(plan) {
+  if (!plan || !Array.isArray(plan.phases)) return false;
+  if (typeof plan.version === 'number' && plan.version >= 3) return false;
+
+  var tpl = window.DEFAULT_PLAN;
+  if (!tpl || !Array.isArray(tpl.phases)) { plan.version = 3; return false; }
+
+  var fresh = {};
+  var i;
+  for (i = 0; i < tpl.phases.length; i++) fresh[tpl.phases[i].id] = tpl.phases[i];
+
+  var changed = false;
+  for (i = 0; i < plan.phases.length; i++) {
+    var p = plan.phases[i];
+    var old = LEGACY_PHASE_DATES[p.id];
+    var now = fresh[p.id];
+    if (!old || !now) continue;
+    // 跟旧出厂值不一样 = 用户自己调过，跳过
+    if (p.start !== old[0] || p.end !== old[1]) continue;
+    if (p.start === now.start && p.end === now.end) continue;
+
+    p.start = now.start;
+    p.end = now.end;
+    changed = true;
+  }
+
+  plan.version = 3;
+  return changed;
+}
+
 function loadPlan() {
   var loaded = null;
   try {
@@ -970,6 +1018,8 @@ function loadPlan() {
 
   if (loaded) {
     state.plan = loaded;
+    // 日期校准（v1.6.1）：改过才落盘，没改就不多写一次
+    if (migratePhaseDates(state.plan)) savePlan();
     return;
   }
 
