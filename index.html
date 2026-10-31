@@ -10,7 +10,7 @@
   <main class="app">
 
     <header class="app-header">
-      <h1 class="app-title">今日打卡 <span class="version-badge" id="app-version">v1.2.0</span></h1>
+      <h1 class="app-title">今日打卡 <span class="version-badge" id="app-version">v1.3.0</span></h1>
       <p class="app-date" id="today-date"></p>
     </header>
 
@@ -29,6 +29,35 @@
     <!-- ========== list 视图 ========== -->
 
     <section id="view-list" class="view-panel">
+
+      <!-- ===== Day 30：学习计划看板 =====
+           回答一个具体问题：现在该复习哪科、还有几天、今天四件事做了几件。
+           计划数据在 plan.js（改计划只改那个文件），渲染在 app.js。 -->
+      <section class="plan-board" id="plan-board">
+        <!-- 当前重点 + 倒计时 -->
+        <div class="plan-now" id="plan-now"></div>
+
+        <!-- 每日四件：独立打卡，key=daily-log，不受云端只读边界影响 -->
+        <div class="plan-block">
+          <h2 class="plan-subtitle">
+            每日四件
+            <span class="daily-count" id="daily-count"></span>
+          </h2>
+          <ul class="daily-list" id="daily-list"></ul>
+        </div>
+
+        <!-- 阶段计划：默认折叠，手机上不占第一屏 -->
+        <details class="plan-block plan-fold">
+          <summary class="plan-subtitle">阶段计划</summary>
+          <ol class="phase-list" id="phase-list"></ol>
+        </details>
+
+        <!-- 六级：贯穿六周的第二条轨道 -->
+        <details class="plan-block plan-fold">
+          <summary class="plan-subtitle">六级 · 六周</summary>
+          <ol class="cet-list" id="cet-list"></ol>
+        </details>
+      </section>
 
       <!-- ===== Day 29：今日待办 =====
            待办和习惯是两类条目：待办走 localStorage key=todos，习惯走 habits。
@@ -150,10 +179,11 @@
         <span class="export-hint">下载当前全部习惯、打卡记录与待办的备份文件</span>
       </p>
       <!-- Day 29：版本记录（详细历史见 CHANGELOG.md） -->
-      <p class="meta-row version-log" id="version-log">版本记录：v1.2.0 · Day 29 今日待办</p>
+      <p class="meta-row version-log" id="version-log">版本记录：v1.3.0 · Day 30 学习计划看板 · v1.2.0 Day 29 今日待办</p>
     </footer>
   </main>
 
+  <script src="plan.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

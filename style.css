@@ -439,7 +439,10 @@ body {
 .error-retry:focus-visible,
 a:focus-visible,
 .crumb-back:focus-visible,
-.view-tab:focus-visible {
+.view-tab:focus-visible,
+.daily-item:focus-visible,
+.export-btn:focus-visible,
+.todo-add-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
@@ -786,5 +789,304 @@ a:focus-visible,
   }
   .todo-add-btn {
     flex: 0 0 auto;
+  }
+}
+
+/* ============================================================
+   Day 30：学习计划看板
+   目标：手机第一屏就能看到「现在主攻什么 + 还有几天 + 四件做了几件」
+   ============================================================ */
+
+.plan-board {
+  margin-bottom: 1rem;
+}
+
+/* ----- 当前重点 + 倒计时 ----- */
+
+.plan-now {
+  padding: 0.9rem 1rem;
+  text-align: center;
+  background: var(--accent-soft);
+  border: 1px solid #dbeafe;
+  border-radius: var(--radius);
+}
+
+.plan-now-label {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.plan-now-main {
+  margin: 0.15rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--accent);
+}
+
+.plan-now-sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.plan-countdown {
+  margin: 0.5rem 0 0;
+  font-size: 0.88rem;
+  color: var(--fg);
+}
+
+.plan-countdown strong {
+  margin: 0 0.15rem;
+  font-size: 1.35rem;
+  color: var(--accent);
+}
+
+.plan-countdown.is-soon strong { color: var(--streak); }
+.plan-countdown.is-urgent strong { color: var(--danger); }
+
+.plan-cet-now {
+  margin: 0.55rem 0 0;
+  padding-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  border-top: 1px dashed #cfe3ff;
+}
+
+.plan-now-done {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--fg);
+}
+
+/* ----- 折叠块（阶段 / 六级） ----- */
+
+.plan-block {
+  margin-top: 0.85rem;
+}
+
+.plan-subtitle {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.plan-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.35rem 0;
+  margin-bottom: 0.4rem;
+}
+.plan-fold > summary::-webkit-details-marker { display: none; }
+.plan-fold > summary::after {
+  content: '▾';
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.plan-fold[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+/* ----- 每日四件 ----- */
+
+.daily-count {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.daily-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;           /* 手指点得中 */
+  padding: 0.55rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.daily-item.is-done {
+  background: var(--done-bg);
+  border-color: #bbf7d0;
+}
+
+.daily-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  font-size: 0.75rem;
+  color: #fff;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.daily-item.is-done .daily-mark {
+  background: var(--done);
+  border-color: var(--done);
+}
+
+.daily-name {
+  font-size: 0.88rem;
+  color: var(--fg);
+}
+
+.daily-item.is-done .daily-name {
+  color: var(--done-text);
+}
+
+.daily-streak {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: var(--streak-text);
+  white-space: nowrap;
+}
+
+/* ----- 阶段卡片 ----- */
+
+.phase-list,
+.cet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.phase-item {
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 10px;
+}
+
+.phase-item.is-active {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+
+.phase-item.is-done {
+  opacity: 0.62;
+}
+
+.phase-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.phase-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.phase-badge {
+  margin-left: auto;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.66rem;
+  color: var(--muted);
+  white-space: nowrap;
+  background: #f1f5f9;
+  border-radius: 999px;
+}
+
+.phase-item.is-active .phase-badge {
+  color: #fff;
+  background: var(--accent);
+}
+
+.phase-range,
+.phase-subjects,
+.phase-note {
+  margin: 0.28rem 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.phase-note {
+  font-size: 0.73rem;
+}
+
+/* ----- 六级分段 ----- */
+
+.cet-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.cet-item.is-active {
+  background: var(--accent-soft);
+  border-color: #bfdbfe;
+}
+
+.cet-label {
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.cet-focus {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg);
+}
+
+.cet-range {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ----- 窄屏微调 ----- */
+
+@media (max-width: 420px) {
+  .plan-now-main {
+    font-size: 1.35rem;
+  }
+  .daily-list {
+    gap: 0.4rem;
+  }
+  .daily-item {
+    padding: 0.5rem 0.55rem;
+  }
+  .cet-item {
+    flex-wrap: wrap;
+  }
+  .cet-range {
+    width: 100%;
+    text-align: right;
   }
 }

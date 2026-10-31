@@ -18,6 +18,10 @@ var TODO_KEY = 'todos';
 var MAX_TODO_TEXT = 50;       // 待办是一句话，比习惯名（20）宽
 var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 
+// Day 30：每日四件的打卡记录（TECH_DESIGN.md 3.3 节）。
+// 计划本身写在 plan.js 里不进存储，这里只存「哪天做了」。
+var DAILY_KEY = 'daily-log';
+
 /* ---------- Day 20：数据源 -------------
  * 公网 https 页面 → 从云端拉真实数据
  * 本地打开（file:// / http://127.0.0.1）→ 继续用 localStorage
@@ -40,6 +44,7 @@ var API_HABITS =
 var state = {
   habits: [],   // [{ id, name, createdAt, records: ['YYYY-MM-DD', ...] }]
   todos: [],    // Day 29：[{ id, text, dueDate, done, createdAt, completedAt }]
+  dailyLog: {}, // Day 30：{ words: ['2026-10-31', ...], english: [...], ... }
   filter: ''    // 筛选只作用于显示，不持久化（SKILL.md 规则 1）
 };
 
@@ -84,6 +89,14 @@ var todoSummaryEl = document.getElementById('todo-summary');
 var todoStatsEl = document.getElementById('todo-stats');
 var todoStatsListEl = document.getElementById('todo-stats-list');
 var todoAlertTimer = null;
+
+// Day 30：学习计划看板。同样判空——测试夹具里没有这些节点，
+// 计划区坏了也不能让习惯/待办跟着崩。
+var planNowEl = document.getElementById('plan-now');
+var dailyListEl = document.getElementById('daily-list');
+var dailyCountEl = document.getElementById('daily-count');
+var phaseListEl = document.getElementById('phase-list');
+var cetListEl = document.getElementById('cet-list');
 
 // 当前视图与列表状态（仅内存，不持久化——刷新就回到默认）
 var currentView = 'list';      // list | detail | stats
@@ -564,6 +577,321 @@ function renderTodoStats() {
   todoStatsEl.hidden = !any;
 }
 
+/* ---------- Day 30：学习计划与每日四件 ---------- */
+
+/**
+ * 两个 'YYYY-MM-DD' 相差多少天（to - from）。
+ * 只有算倒计时才转 Date —— 其余比较一律用字符串字典序，省掉时区的坑。
+ */
+function daysBetween(fromStr, toStr) {
+  var a = fromStr.split('-');
+  var b = toStr.split('-');
+  var da = new Date(Number(a[0]), Number(a[1]) - 1, Number(a[2]));
+  var db = new Date(Number(b[0]), Number(b[1]) - 1, Number(b[2]));
+  return Math.round((db.getTime() - da.getTime()) / 86400000);
+}
+
+/** '2026-11-11' → '11/11'，卡片上地方小 */
+function shortDate(str) {
+  if (!str) return '';
+  var p = str.split('-');
+  return Number(p[1]) + '/' + Number(p[2]);
+}
+
+function loadDailyLog() {
+  state.dailyLog = {};
+  try {
+    var raw = localStorage.getItem(DAILY_KEY);
+    if (!raw) return;
+    var parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      state.dailyLog = parsed;
+    }
+  } catch (err) {
+    // 和 loadTodos 一样：四件坏了不能拖垮主页面
+    console.error('每日打卡记录读取失败，按空处理：', err);
+  }
+}
+
+function saveDailyLog() {
+  try {
+    localStorage.setItem(DAILY_KEY, JSON.stringify(state.dailyLog));
+    return true;
+  } catch (err) {
+    console.error('每日打卡记录写入失败：', err);
+    return false;
+  }
+}
+
+function isDailyDone(key, day) {
+  var rec = state.dailyLog[key];
+  return Array.isArray(rec) && rec.indexOf(day) !== -1;
+}
+
+/** 从今天往前数连续有记录的天数（今天没打就是 0） */
+function dailyStreak(key) {
+  var rec = state.dailyLog[key];
+  if (!Array.isArray(rec) || rec.length === 0) return 0;
+  var set = {};
+  for (var i = 0; i < rec.length; i++) set[rec[i]] = true;
+
+  var streak = 0;
+  var d = new Date();
+  for (var n = 0; n < 366; n++) {
+    if (!set[toDateStr(d)]) break;
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+function toggleDaily(key) {
+  var day = todayStr();
+  var rec = state.dailyLog[key];
+  if (!Array.isArray(rec)) rec = state.dailyLog[key] = [];
+
+  var i = rec.indexOf(day);
+  if (i === -1) rec.push(day);
+  else rec.splice(i, 1);
+
+  if (!saveDailyLog()) showHint('已勾选，但没能保存到本地（刷新会恢复）');
+  renderDailyList();
+}
+
+/** active = 日期落在区间内；upcoming = 还没开始；done = 已经过去 */
+function phaseStatus(phase, today) {
+  if (today < phase.start) return 'upcoming';
+  if (today > phase.end) return 'done';
+  return 'active';
+}
+
+function renderDailyList() {
+  if (!dailyListEl) return;
+  var plan = window.STUDY_PLAN;
+  if (!plan || !plan.daily) return;
+
+  var today = todayStr();
+  var done = 0;
+  dailyListEl.textContent = '';
+
+  for (var i = 0; i < plan.daily.length; i++) {
+    var item = plan.daily[i];
+    var checked = isDailyDone(item.key, today);
+    if (checked) done++;
+
+    var li = document.createElement('li');
+    li.className = 'daily-item' + (checked ? ' is-done' : '');
+    li.setAttribute('data-key', item.key);
+    li.setAttribute('role', 'checkbox');
+    li.setAttribute('tabindex', '0');
+    li.setAttribute('aria-checked', checked ? 'true' : 'false');
+    li.setAttribute('aria-label', (checked ? '取消' : '勾选') + '：' + item.name);
+
+    var mark = document.createElement('span');
+    mark.className = 'daily-mark';
+    mark.textContent = checked ? '✓' : '';
+
+    var name = document.createElement('span');
+    name.className = 'daily-name';
+    name.textContent = item.name;
+
+    var meta = document.createElement('span');
+    meta.className = 'daily-streak';
+    var s = dailyStreak(item.key);
+    meta.textContent = s > 1 ? '连续 ' + s + ' 天' : '';
+
+    li.appendChild(mark);
+    li.appendChild(name);
+    li.appendChild(meta);
+    dailyListEl.appendChild(li);
+  }
+
+  if (dailyCountEl) dailyCountEl.textContent = done + '/' + plan.daily.length;
+}
+
+function renderPlanNow() {
+  if (!planNowEl) return;
+  var plan = window.STUDY_PLAN;
+  planNowEl.textContent = '';
+  if (!plan || !plan.courses) return;
+
+  var today = todayStr();
+  var active = null;
+  var next = null;
+
+  for (var i = 0; i < plan.courses.length; i++) {
+    var st = phaseStatus(plan.courses[i], today);
+    if (st === 'active' && !active) active = plan.courses[i];
+    if (st === 'upcoming' && !next) next = plan.courses[i];
+  }
+
+  var focus = active || next;
+
+  if (focus) {
+    var label = document.createElement('p');
+    label.className = 'plan-now-label';
+    label.textContent = active ? '现在主攻' : '下一阶段主攻';
+    planNowEl.appendChild(label);
+
+    var main = document.createElement('p');
+    main.className = 'plan-now-main';
+    main.textContent = focus.main;
+    planNowEl.appendChild(main);
+
+    if (focus.secondary) {
+      var sub = document.createElement('p');
+      sub.className = 'plan-now-sub';
+      sub.textContent = '次：' + focus.secondary;
+      planNowEl.appendChild(sub);
+    }
+
+    var left = daysBetween(today, focus.exam.date);
+    var cd = document.createElement('p');
+    cd.className = 'plan-countdown';
+
+    if (left > 0) {
+      // 不用 createTextNode：测试夹具没有它，用 span 承载纯文本更省事
+      var prefix = document.createElement('span');
+      prefix.textContent = '距「' + focus.exam.name + '」还有 ';
+      var num = document.createElement('strong');
+      num.textContent = String(left);
+      var suffix = document.createElement('span');
+      suffix.textContent = ' 天';
+      cd.appendChild(prefix);
+      cd.appendChild(num);
+      cd.appendChild(suffix);
+      if (left <= 3) cd.classList.add('is-urgent');
+      else if (left <= 7) cd.classList.add('is-soon');
+    } else if (left === 0) {
+      cd.textContent = '今天就是「' + focus.exam.name + '」';
+      cd.classList.add('is-urgent');
+    } else {
+      cd.textContent = '「' + focus.exam.name + '」已结束';
+    }
+    planNowEl.appendChild(cd);
+  } else {
+    var allDone = document.createElement('p');
+    allDone.className = 'plan-now-done';
+    allDone.textContent = '课内考试都考完了，接下来专心六级。';
+    planNowEl.appendChild(allDone);
+  }
+
+  // 六级：第二条轨道，同时进行，单独一行
+  var cet = plan.cet;
+  if (cet && cet.stages) {
+    var stage = null;
+    for (var j = 0; j < cet.stages.length; j++) {
+      if (today >= cet.stages[j].start && today <= cet.stages[j].end) {
+        stage = cet.stages[j];
+        break;
+      }
+    }
+    var cetLeft = daysBetween(today, cet.examDate);
+    var line = document.createElement('p');
+    line.className = 'plan-cet-now';
+    if (cetLeft >= 0) {
+      line.textContent = cet.name +
+        (stage ? ' · ' + stage.label + '：' + stage.focus : '') +
+        ' · 还有 ' + cetLeft + ' 天';
+      planNowEl.appendChild(line);
+    }
+  }
+}
+
+function renderPhaseList() {
+  if (!phaseListEl) return;
+  var plan = window.STUDY_PLAN;
+  if (!plan || !plan.courses) return;
+
+  var today = todayStr();
+  phaseListEl.textContent = '';
+
+  for (var i = 0; i < plan.courses.length; i++) {
+    var p = plan.courses[i];
+    var st = phaseStatus(p, today);
+
+    var li = document.createElement('li');
+    li.className = 'phase-item is-' + st;
+
+    var head = document.createElement('div');
+    head.className = 'phase-head';
+
+    var name = document.createElement('span');
+    name.className = 'phase-name';
+    name.textContent = p.name;
+
+    var badge = document.createElement('span');
+    badge.className = 'phase-badge';
+    badge.textContent = st === 'active' ? '进行中' : (st === 'done' ? '已结束' : '未开始');
+
+    head.appendChild(name);
+    head.appendChild(badge);
+
+    var range = document.createElement('p');
+    range.className = 'phase-range';
+    range.textContent = shortDate(p.start) + ' – ' + shortDate(p.end) +
+      ' · 共 ' + (daysBetween(p.start, p.end) + 1) + ' 天';
+
+    var subj = document.createElement('p');
+    subj.className = 'phase-subjects';
+    subj.textContent = '主：' + p.main + (p.secondary ? ' · 次：' + p.secondary : '');
+
+    li.appendChild(head);
+    li.appendChild(range);
+    li.appendChild(subj);
+
+    if (p.note) {
+      var note = document.createElement('p');
+      note.className = 'phase-note';
+      note.textContent = p.note;
+      li.appendChild(note);
+    }
+
+    phaseListEl.appendChild(li);
+  }
+}
+
+function renderCetList() {
+  if (!cetListEl) return;
+  var plan = window.STUDY_PLAN;
+  if (!plan || !plan.cet || !plan.cet.stages) return;
+
+  var today = todayStr();
+  cetListEl.textContent = '';
+
+  for (var i = 0; i < plan.cet.stages.length; i++) {
+    var s = plan.cet.stages[i];
+    var active = today >= s.start && today <= s.end;
+
+    var li = document.createElement('li');
+    li.className = 'cet-item' + (active ? ' is-active' : '');
+
+    var label = document.createElement('span');
+    label.className = 'cet-label';
+    label.textContent = s.label;
+
+    var focus = document.createElement('span');
+    focus.className = 'cet-focus';
+    focus.textContent = s.focus;
+
+    var range = document.createElement('span');
+    range.className = 'cet-range';
+    range.textContent = shortDate(s.start) + '–' + shortDate(s.end);
+
+    li.appendChild(label);
+    li.appendChild(focus);
+    li.appendChild(range);
+    cetListEl.appendChild(li);
+  }
+}
+
+function renderPlan() {
+  renderPlanNow();
+  renderDailyList();
+  renderPhaseList();
+  renderCetList();
+}
+
 /* ---------- 渲染 ---------- */
 
 function showHint(message) {
@@ -656,6 +984,9 @@ function render() {
 
   // Day 29：待办和习惯是两类条目，同一页各自渲染
   renderTodos();
+
+  // Day 30：计划看板（当前主攻 + 倒计时 + 每日四件）
+  renderPlan();
 }
 
 /* ---------- Day 13：视图路由 ---------- */
@@ -1005,6 +1336,30 @@ if (todoListEl) {
   });
 }
 
+/* ---------- Day 30：每日四件事件 ---------- */
+
+if (dailyListEl) {
+  // 整个 li 都是点击目标（手机上点小方块太费劲）
+  dailyListEl.addEventListener('click', function (event) {
+    var target = event.target;
+    if (!target || !target.closest) return;
+    var li = target.closest('.daily-item');
+    if (!li) return;
+    toggleDaily(li.dataset.key);
+  });
+
+  // 键盘等价操作：Enter / 空格
+  dailyListEl.addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+    var target = event.target;
+    if (!target || !target.closest) return;
+    var li = target.closest('.daily-item');
+    if (!li) return;
+    event.preventDefault();
+    toggleDaily(li.dataset.key);
+  });
+}
+
 formEl.addEventListener('submit', function (event) {
   event.preventDefault();
   var result = addHabit(inputEl.value);
@@ -1095,6 +1450,8 @@ function loadFromCloud() {
 function bootstrap() {
   // Day 29：待办先读（纯本地），和习惯的数据源互不阻塞
   loadTodos();
+  // Day 30：每日四件的打卡记录同理
+  loadDailyLog();
 
   // 底部那句数据来源跟着实际数据源走：本地打开却写着「来自云端」会误导人
   var srcEl = document.getElementById('habit-source');
